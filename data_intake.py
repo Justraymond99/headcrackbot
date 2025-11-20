@@ -12,7 +12,7 @@ from market_definitions import (
     SPORT_PLAYER_PROPS, get_market_description, is_yes_no_prop, is_over_under_prop
 )
 from all_markets_parser import AllMarketsParser
-from comprehensive_markets import get_comprehensive_markets_string, get_sport_abbreviation_from_api_key_from_api_key
+from comprehensive_markets import get_comprehensive_markets_string
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -607,8 +607,15 @@ class DataIntake:
     
     def _get_sport_abbreviation(self, api_sport_key: str) -> str:
         """Convert API sport key to abbreviation."""
-        from comprehensive_markets import get_sport_abbreviation_from_api_key
-        return get_sport_abbreviation_from_api_key(api_sport_key)
+        mapping = {
+            "basketball_nba": "NBA",
+            "americanfootball_nfl": "NFL",
+            "baseball_mlb": "MLB",
+            "icehockey_nhl": "NHL",
+            "mma_mixed_martial_arts": "UFC",
+            "boxing_boxing": "BOXING"
+        }
+        return mapping.get(api_sport_key.lower(), api_sport_key.upper())
     
     def _get_game_id_from_event(self, event_data: Dict, sport: str) -> str:
         """Generate game_id from event data."""

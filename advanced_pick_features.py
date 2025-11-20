@@ -6,7 +6,7 @@ from sent_pick import SentPick
 from bankroll_manager import BankrollManager
 from pick_performance_tracker import PickPerformanceTracker
 from clv_tracker import CLVTracker
-from sms_service import SMSService
+from telegram_service import TelegramService
 from value_bet_finder import ValueBetFinder
 import logging
 import os
@@ -22,7 +22,7 @@ class AdvancedPickFeatures:
         self.bankroll_manager = BankrollManager()
         self.performance_tracker = PickPerformanceTracker()
         self.clv_tracker = CLVTracker()
-        self.sms_service = SMSService()
+        self.telegram_service = TelegramService()
         self.value_bet_finder = ValueBetFinder()
     
     def add_bet_sizing_to_picks(
@@ -220,7 +220,7 @@ class AdvancedPickFeatures:
                 message_parts.append("")
             
             message = "\n".join(message_parts)
-            return self.sms_service.send_sms(message)
+            return self.telegram_service.send_message(message)
         
         except Exception as e:
             logger.error(f"Error sending game reminders: {e}")
@@ -395,11 +395,11 @@ class AdvancedPickFeatures:
             include_explanations: Whether to include pick explanations
         """
         if not picks:
-            return self.sms_service.send_sms("No picks available")
+            return self.telegram_service.send_message("No picks available")
         
         message_parts = ["🏀 DETAILED PICKS 🏀\n"]
         
-        for i, pick in enumerate(picks[:5], 1):  # Limit to 5 for SMS
+        for i, pick in enumerate(picks[:5], 1):  # Limit to 5 for Telegram
             game = pick.get("game")
             bet_type = pick.get("bet_type", "unknown")
             selection = pick.get("selection", "N/A")
@@ -485,12 +485,12 @@ class AdvancedPickFeatures:
             
             if include_explanations:
                 explanation = self.get_pick_explanation(pick)
-                # Shorten for SMS
+                # Shorten for Telegram
                 explanation = explanation[:80] + "..." if len(explanation) > 80 else explanation
                 message_parts.append(f"   💡 {explanation}")
         
         message = "\n".join(message_parts)
-        return self.sms_service.send_sms(message)
+        return self.telegram_service.send_message(message)
     
     def __del__(self):
         if hasattr(self, 'session'):

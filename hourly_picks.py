@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from models import Game, SessionLocal
 from value_bet_finder import ValueBetFinder
 from ai_picks import AIPicks
-from sms_service import SMSService
+from telegram_service import TelegramService
 from data_intake import DataIntake
 import logging
 
@@ -18,7 +18,7 @@ class HourlyPicksGenerator:
         self.session = SessionLocal()
         self.value_bet_finder = ValueBetFinder()
         self.ai_picks = AIPicks()
-        self.sms_service = SMSService()
+        self.telegram_service = TelegramService()
         self.data_intake = DataIntake()
     
     def refresh_odds_data(self, sports: Optional[List[str]] = None):
@@ -212,7 +212,7 @@ class HourlyPicksGenerator:
         refresh_odds: bool = True
     ) -> bool:
         """
-        Generate and send hourly picks via SMS.
+        Generate and send hourly picks via Telegram.
         
         Args:
             min_ev: Minimum expected value threshold
@@ -236,17 +236,17 @@ class HourlyPicksGenerator:
             
             if not picks:
                 logger.info("No picks to send")
-                return self.sms_service.send_sms(
+                return self.telegram_service.send_message(
                     "📊 No picks found at this time. Check back later!"
                 )
             
-            logger.info(f"Sending {len(picks)} picks via SMS...")
-            return self.sms_service.send_picks_sms(picks, max_picks=max_picks)
+            logger.info(f"Sending {len(picks)} picks via Telegram...")
+            return self.telegram_service.send_picks_message(picks, max_picks=max_picks)
         
         except Exception as e:
             logger.error(f"Error sending hourly picks: {e}")
             error_msg = f"❌ Error generating picks: {str(e)}"
-            self.sms_service.send_sms(error_msg)
+            self.telegram_service.send_message(error_msg)
             return False
     
     def __del__(self):

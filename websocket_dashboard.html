@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hourly Picks - Real-Time Dashboard</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .status {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        
+        .status.connected {
+            background: #10b981;
+            color: white;
+        }
+        
+        .status.disconnected {
+            background: #ef4444;
+            color: white;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .card h3 {
+            margin-bottom: 15px;
+            color: #667eea;
+        }
+        
+        .picks-list, .parlays-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .pick-item, .parlay-item {
+            padding: 10px;
+            margin-bottom: 10px;
+            background: #f3f4f6;
+            border-radius: 5px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .pick-item.new {
+            animation: slideIn 0.3s ease-out;
+            border-left-color: #10b981;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            text-align: center;
+        }
+        
+        .stat-item {
+            padding: 10px;
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #6b7280;
+            text-transform: uppercase;
+        }
+        
+        .log {
+            background: #1f2937;
+            color: #f9fafb;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 5px;
+        }
+        
+        .log-entry.info {
+            color: #60a5fa;
+        }
+        
+        .log-entry.success {
+            color: #34d399;
+        }
+        
+        .log-entry.error {
+            color: #f87171;
+        }
+        
+        .timestamp {
+            font-size: 10px;
+            color: #9ca3af;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎯 Hourly Picks - Real-Time Dashboard</h1>
+            <span id="connectionStatus" class="status disconnected">Disconnected</span>
+            <div class="stats" style="margin-top: 15px;">
+                <div class="stat-item">
+                    <div class="stat-value" id="scheduledGames">0</div>
+                    <div class="stat-label">Scheduled Games</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="liveGames">0</div>
+                    <div class="stat-label">Live Games</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="picksCount">0</div>
+                    <div class="stat-label">Picks Received</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="grid">
+            <div class="card">
+                <h3>🎲 Latest Picks</h3>
+                <div id="picksList" class="picks-list"></div>
+            </div>
+            
+            <div class="card">
+                <h3>🎯 Latest Parlays</h3>
+                <div id="parlaysList" class="parlays-list"></div>
+            </div>
+            
+            <div class="card">
+                <h3>📊 Line Movements</h3>
+                <div id="movementsList"></div>
+            </div>
+            
+            <div class="card">
+                <h3>💬 System Messages</h3>
+                <div id="log" class="log"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Configuration
+        const SERVER_URL = 'http://localhost:5000';
+        
+        // Initialize Socket.IO
+        const socket = io(SERVER_URL);
+        
+        let picksCount = 0;
+        
+        // Connection handlers
+        socket.on('connect', () => {
+            updateStatus(true);
+            addLog('Connected to WebSocket server', 'success');
+            socket.emit('subscribe', {
+                events: ['new_picks', 'new_parlays', 'line_movement', 'system_message', 'stats_update']
+            });
+        });
+        
+        socket.on('disconnect', () => {
+            updateStatus(false);
+            addLog('Disconnected from server', 'error');
+        });
+        
+        socket.on('connected', (data) => {
+            addLog(data.message, 'success');
+        });
+        
+        // Event handlers
+        socket.on('new_picks', (data) => {
+            picksCount += data.picks.length;
+            document.getElementById('picksCount').textContent = picksCount;
+            displayPicks(data.picks);
+            addLog(`Received ${data.picks.length} new picks`, 'info');
+        });
+        
+        socket.on('new_parlays', (data) => {
+            displayParlays(data.parlays_by_sport);
+            addLog(`Received parlays for ${data.sports.length} sports`, 'info');
+        });
+        
+        socket.on('line_movement', (data) => {
+            displayLineMovement(data.movement);
+            addLog('Line movement detected', 'info');
+        });
+        
+        socket.on('stats_update', (data) => {
+            document.getElementById('scheduledGames').textContent = data.scheduled_games || 0;
+            document.getElementById('liveGames').textContent = data.live_games || 0;
+        });
+        
+        socket.on('system_message', (data) => {
+            addLog(data.message, data.level || 'info');
+        });
+        
+        // UI Update functions
+        function updateStatus(connected) {
+            const statusEl = document.getElementById('connectionStatus');
+            if (connected) {
+                statusEl.textContent = 'Connected';
+                statusEl.className = 'status connected';
+            } else {
+                statusEl.textContent = 'Disconnected';
+                statusEl.className = 'status disconnected';
+            }
+        }
+        
+        function displayPicks(picks) {
+            const container = document.getElementById('picksList');
+            picks.slice(0, 5).forEach(pick => {
+                const item = document.createElement('div');
+                item.className = 'pick-item new';
+                item.innerHTML = `
+                    <strong>${pick.selection || 'N/A'}</strong><br>
+                    <small>${pick.bet_type || 'unknown'} | ${pick.odds || 'N/A'}</small>
+                    <span class="timestamp">${new Date().toLocaleTimeString()}</span>
+                `;
+                container.insertBefore(item, container.firstChild);
+                
+                // Remove 'new' class after animation
+                setTimeout(() => item.classList.remove('new'), 300);
+                
+                // Limit to 10 items
+                if (container.children.length > 10) {
+                    container.removeChild(container.lastChild);
+                }
+            });
+        }
+        
+        function displayParlays(parlaysBySport) {
+            const container = document.getElementById('parlaysList');
+            container.innerHTML = '';
+            
+            Object.entries(parlaysBySport).forEach(([sport, parlays]) => {
+                parlays.forEach(parlay => {
+                    const item = document.createElement('div');
+                    item.className = 'parlay-item';
+                    item.innerHTML = `
+                        <strong>${sport} - ${parlay.num_legs}-Leg Parlay</strong><br>
+                        <small>Odds: ${parlay.combined_odds?.toFixed(0) || 'N/A'} | 
+                        Confidence: ${(parlay.combined_confidence * 100).toFixed(0)}%</small>
+                        <span class="timestamp">${new Date().toLocaleTimeString()}</span>
+                    `;
+                    container.appendChild(item);
+                });
+            });
+        }
+        
+        function displayLineMovement(movement) {
+            const container = document.getElementById('movementsList');
+            const item = document.createElement('div');
+            item.className = 'pick-item';
+            item.innerHTML = `
+                <strong>${movement.description || 'Line Movement'}</strong><br>
+                <small>Old: ${movement.old_odds || 'N/A'} → New: ${movement.new_odds || 'N/A'}</small>
+                <span class="timestamp">${new Date().toLocaleTimeString()}</span>
+            `;
+            container.insertBefore(item, container.firstChild);
+            
+            if (container.children.length > 5) {
+                container.removeChild(container.lastChild);
+            }
+        }
+        
+        function addLog(message, level = 'info') {
+            const log = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${level}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            log.insertBefore(entry, log.firstChild);
+            
+            if (log.children.length > 20) {
+                log.removeChild(log.lastChild);
+            }
+        }
+        
+        // Initial log
+        addLog('Dashboard initialized. Connecting...', 'info');
+    </script>
+</body>
+</html>
+

@@ -5,11 +5,19 @@ from models import Game, SessionLocal
 from sent_pick import SentPick, SentPickTracker
 from pick_performance_tracker import PickPerformanceTracker
 from ai_picks import AIPicks
-from sms_service import SMSService
+from telegram_service import TelegramService
 from line_shopper import LineShopper
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Try to import WebSocket broadcaster (optional)
+try:
+    from websocket_server import broadcast_performance_update
+    WEBSOCKET_AVAILABLE = True
+except ImportError:
+    WEBSOCKET_AVAILABLE = False
+    logger.debug("WebSocket server not available (optional feature)")
 
 
 class PickEnhancements:
@@ -17,7 +25,7 @@ class PickEnhancements:
     
     def __init__(self):
         self.session = SessionLocal()
-        self.sms_service = SMSService()
+        self.telegram_service = TelegramService()
         self.pick_tracker = SentPickTracker()
         self.performance_tracker = PickPerformanceTracker()
         self.ai_picks = AIPicks()
@@ -30,7 +38,7 @@ class PickEnhancements:
         max_legs: int = 15
     ) -> bool:
         """
-        Send top parlay suggestions via SMS.
+        Send top parlay suggestions via Telegram.
         
         Args:
             max_parlays: Maximum number of parlays to send
@@ -108,7 +116,7 @@ class PickEnhancements:
                     message_parts.append(f"         {game_info}")
             
             message = "\n".join(message_parts)
-            return self.sms_service.send_sms(message)
+            return self.telegram_service.send_message(message)
         
         except Exception as e:
             logger.error(f"Error sending parlay suggestions: {e}")
@@ -131,7 +139,7 @@ class PickEnhancements:
             
             if stats["total_picks"] == 0:
                 message = f"📊 No picks sent in the last {days} days"
-                return self.sms_service.send_sms(message)
+                return self.telegram_service.send_message(message)
             
             message_parts = [f"📊 PERFORMANCE SUMMARY ({days} days)\n"]
             message_parts.append(f"Total Picks: {stats['total_picks']}")
@@ -158,7 +166,16 @@ class PickEnhancements:
                             )
             
             message = "\n".join(message_parts)
-            return self.sms_service.send_sms(message)
+            success = self.telegram_service.send_message(message)
+            
+            # Broadcast via WebSocket if available
+            if WEBSOCKET_AVAILABLE:
+                try:
+                    broadcast_performance_update(stats)
+                except Exception as e:
+                    logger.debug(f"WebSocket broadcast failed: {e}")
+            
+            return success
         
         except Exception as e:
             logger.error(f"Error sending performance summary: {e}")
@@ -262,7 +279,7 @@ class PickEnhancements:
                 pick = movement["pick"]
                 game = movement["game"]
                 
-                if game.sport == "UFC":
+                if game.sport in ["UFC", "BOXING"]:
                     game_info = f"{game.fighter1} vs {game.fighter2}"
                 else:
                     game_info = f"{game.away_team} @ {game.home_team}"
@@ -276,7 +293,17 @@ class PickEnhancements:
                 message_parts.append("")
             
             message = "\n".join(message_parts)
-            return self.sms_service.send_sms(message)
+            success = self.telegram_service.send_message(message)
+            
+            # Broadcast via WebSocket if available
+            try:
+                from websocket_server import broadcast_line_movement
+                for movement in significant_movements:
+                    broadcast_line_movement(movement)
+            except Exception as e:
+                logger.debug(f"WebSocket broadcast failed: {e}")
+            
+            return success
         
         except Exception as e:
             logger.error(f"Error sending line movement alerts: {e}")
@@ -345,7 +372,7 @@ class PickEnhancements:
                 game = result["game"]
                 leg = result["leg"]
                 
-                if game.sport == "UFC":
+                if game.sport in ["UFC", "BOXING"]:
                     game_info = f"{game.fighter1} vs {game.fighter2}"
                 else:
                     game_info = f"{game.away_team} @ {game.home_team}"
@@ -367,7 +394,7 @@ class PickEnhancements:
             message_parts.append(f"\nRecord: {wins}W-{losses}L")
             
             message = "\n".join(message_parts)
-            return self.sms_service.send_sms(message)
+            return self.telegram_service.send_message(message)
         
         except Exception as e:
             logger.error(f"Error sending pick results: {e}")

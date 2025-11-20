@@ -14,6 +14,16 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Optional WebSocket server
+try:
+    from websocket_integration import start_websocket_background
+    from websocket_server import broadcast_system_message
+    WEBSOCKET_ENABLED = os.getenv("ENABLE_WEBSOCKET", "false").lower() == "true"
+    WEBSOCKET_PORT = int(os.getenv("WEBSOCKET_PORT", "5000"))
+except ImportError:
+    WEBSOCKET_ENABLED = False
+    logger.debug("WebSocket not available (optional feature)")
+
 
 def send_picks_job():
     """Main hourly picks job - sends individual picks."""
@@ -44,6 +54,12 @@ def send_picks_job():
         
         if success:
             logger.info("✅ Hourly picks sent successfully")
+            # Broadcast via WebSocket if enabled
+            if WEBSOCKET_ENABLED:
+                try:
+                    broadcast_system_message("Hourly picks sent successfully", "success")
+                except:
+                    pass
         else:
             logger.warning("⚠️ Failed to send hourly picks")
     
@@ -78,6 +94,12 @@ def send_parlays_job():
         
         if success:
             logger.info("✅ Hourly parlays sent successfully")
+            # Broadcast via WebSocket if enabled
+            if WEBSOCKET_ENABLED:
+                try:
+                    broadcast_system_message("Hourly parlays sent successfully", "success")
+                except:
+                    pass
         else:
             logger.warning("⚠️ Failed to send hourly parlays")
     
@@ -148,6 +170,15 @@ def send_results_followup_job():
 def main():
     """Main scheduler function with all features."""
     logger.info("Starting enhanced hourly picks scheduler...")
+    
+    # Start WebSocket server if enabled
+    if WEBSOCKET_ENABLED:
+        try:
+            start_websocket_background(port=WEBSOCKET_PORT)
+            broadcast_system_message("Hourly Picks Scheduler started", "info")
+            logger.info(f"✅ WebSocket server started on port {WEBSOCKET_PORT}")
+        except Exception as e:
+            logger.warning(f"Failed to start WebSocket server: {e}")
     
     scheduler = BlockingScheduler()
     

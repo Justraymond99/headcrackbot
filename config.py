@@ -21,7 +21,13 @@ NOTION_DATABASE_ID = os.getenv("NOTION_DATABASE_ID", "")
 # Google Sheets
 GOOGLE_SHEETS_CREDENTIALS_PATH = os.getenv("GOOGLE_SHEETS_CREDENTIALS_PATH", "")
 
-# Twilio SMS Configuration (for hourly picks texting)
+# Telegram Configuration (for hourly picks - recommended, free & easy!)
+# Get bot token from @BotFather on Telegram: https://t.me/botfather
+# Get chat ID by messaging your bot and visiting: https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+
+# Twilio SMS Configuration (optional fallback - requires registration)
 # Get these from https://www.twilio.com/console
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "")
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")

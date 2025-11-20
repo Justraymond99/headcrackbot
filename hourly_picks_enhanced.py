@@ -5,14 +5,44 @@ from models import Game, SessionLocal
 from value_bet_finder import ValueBetFinder
 from ai_picks import AIPicks
 from sms_service import SMSService
+from email_service import EmailService
 from data_intake import DataIntake
 from sent_pick import SentPickTracker
 from line_shopper import LineShopper
 from diverse_parlay_generator import DiverseParlayGenerator
 import logging
 import time
+import os
 
 logger = logging.getLogger(__name__)
+
+# Try to import iMessage service (Mac only)
+try:
+    from imessage_service import iMessageService
+    IMESSAGE_AVAILABLE = True
+except ImportError:
+    IMESSAGE_AVAILABLE = False
+    logger.debug("iMessage service not available (requires macOS)")
+
+# Try to import Telegram service
+try:
+    from telegram_service import TelegramService
+    TELEGRAM_AVAILABLE = True
+except ImportError:
+    TELEGRAM_AVAILABLE = False
+    logger.debug("Telegram service not available")
+
+# Try to import WebSocket broadcaster (optional)
+try:
+    from websocket_server import (
+        broadcast_new_picks,
+        broadcast_new_parlays,
+        broadcast_system_message
+    )
+    WEBSOCKET_AVAILABLE = True
+except ImportError:
+    WEBSOCKET_AVAILABLE = False
+    logger.debug("WebSocket server not available (optional feature)")
 
 
 class EnhancedHourlyPicksGenerator:
@@ -23,10 +53,50 @@ class EnhancedHourlyPicksGenerator:
         self.value_bet_finder = ValueBetFinder()
         self.ai_picks = AIPicks()
         self.sms_service = SMSService()
+        self.email_service = EmailService()
         self.data_intake = DataIntake()
         self.pick_tracker = SentPickTracker()
         self.line_shopper = LineShopper()
         self.parlay_generator = DiverseParlayGenerator()
+        
+        # Initialize alternative notification services
+        self.imessage_service = None
+        if IMESSAGE_AVAILABLE:
+            try:
+                self.imessage_service = iMessageService()
+            except Exception as e:
+                logger.debug(f"Could not initialize iMessage service: {e}")
+        
+        self.telegram_service = None
+        if TELEGRAM_AVAILABLE:
+            try:
+                self.telegram_service = TelegramService()
+            except Exception as e:
+                logger.debug(f"Could not initialize Telegram service: {e}")
+        
+        # Determine which notification method to use (priority order)
+        self.notification_method = None
+        self.notification_service = None
+        
+        # Check in priority order: Telegram > iMessage > Email > SMS
+        if self.telegram_service and self.telegram_service.is_configured:
+            self.notification_method = "Telegram"
+            self.notification_service = self.telegram_service
+            logger.info("📲 Using Telegram notifications (free & easy!)")
+        elif self.imessage_service and self.imessage_service.is_configured:
+            self.notification_method = "iMessage"
+            self.notification_service = self.imessage_service
+            logger.info("💬 Using iMessage notifications (no registration needed!)")
+        elif self.email_service.is_configured:
+            self.notification_method = "Email"
+            self.notification_service = self.email_service
+            logger.info("📧 Using Email notifications")
+        elif self.sms_service.is_configured:
+            self.notification_method = "SMS"
+            self.notification_service = self.sms_service
+            logger.info("📱 Using SMS notifications (Twilio)")
+        else:
+            logger.warning("⚠️ No notification method configured! Picks will only be logged.")
     
     def refresh_odds_data(self, sports: Optional[List[str]] = None, retries: int = 3):
         """Refresh odds data from APIs with retry logic."""
@@ -361,14 +431,43 @@ class EnhancedHourlyPicksGenerator:
                     if sport in sports
                 }
             
-            # Send via SMS
-            success = self.sms_service.send_parlays_sms(
-                parlays_by_sport,
-                max_parlays_per_sport=max_parlays_per_sport
-            )
+            # Send via configured notification service (automatic fallback)
+            success = False
+            if self.notification_service:
+                method = self.notification_method.lower()
+                if method == "sms":
+                    success = self.sms_service.send_parlays_sms(
+                        parlays_by_sport,
+                        max_parlays_per_sport=max_parlays_per_sport
+                    )
+                elif method == "imessage":
+                    success = self.imessage_service.send_parlays_message(
+                        parlays_by_sport,
+                        max_parlays_per_sport=max_parlays_per_sport
+                    )
+                elif method == "telegram":
+                    success = self.telegram_service.send_parlays_message(
+                        parlays_by_sport,
+                        max_parlays_per_sport=max_parlays_per_sport
+                    )
+                elif method == "email":
+                    success = self.email_service.send_parlays_email(
+                        parlays_by_sport,
+                        max_parlays_per_sport=max_parlays_per_sport
+                    )
+            else:
+                logger.warning("No notification method configured!")
+                success = False
             
             if success:
                 logger.info(f"✅ Diverse parlays sent for {len(parlays_by_sport)} sports")
+                
+                # Broadcast via WebSocket if available
+                if WEBSOCKET_AVAILABLE:
+                    try:
+                        broadcast_new_parlays(parlays_by_sport)
+                    except Exception as e:
+                        logger.debug(f"WebSocket broadcast failed: {e}")
             else:
                 logger.warning("⚠️ Failed to send diverse parlays")
             
@@ -414,14 +513,46 @@ class EnhancedHourlyPicksGenerator:
                 logger.info("No new picks to send")
                 # Only send "no picks" message if we haven't sent one recently
                 recent_count = self.pick_tracker.get_recent_sent_count(hours=1)
-                if recent_count == 0:
-                    return self.sms_service.send_sms(
-                        "📊 No new picks found. Check back later!"
-                    )
+                if recent_count == 0 and self.notification_service:
+                    no_picks_msg = "📊 No new picks found. Check back later!"
+                    method = self.notification_method.lower()
+                    if method == "sms":
+                        return self.sms_service.send_sms(no_picks_msg)
+                    elif method == "imessage":
+                        return self.imessage_service.send_message(no_picks_msg)
+                    elif method == "telegram":
+                        return self.telegram_service.send_message(no_picks_msg)
+                    elif method == "email":
+                        return self.email_service.send_email("📊 No Picks Available", no_picks_msg)
                 return True
             
-            logger.info(f"Sending {len(picks)} picks via SMS...")
-            success = self.sms_service.send_picks_sms(picks, max_picks=max_picks)
+            # Send via configured notification service (automatic fallback)
+            success = False
+            if self.notification_service:
+                method = self.notification_method.lower()
+                logger.info(f"Sending {len(picks)} picks via {self.notification_method}...")
+                
+                if method == "sms":
+                    success = self.sms_service.send_picks_sms(picks, max_picks=max_picks)
+                elif method == "imessage":
+                    success = self.imessage_service.send_picks_message(picks, max_picks=max_picks)
+                elif method == "telegram":
+                    success = self.telegram_service.send_picks_message(picks, max_picks=max_picks)
+                elif method == "email":
+                    success = self.email_service.send_picks_email(picks, max_picks=max_picks)
+            else:
+                logger.warning("No notification method configured! Picks will only be logged.")
+                logger.info(f"Generated {len(picks)} picks:")
+                for i, pick in enumerate(picks[:max_picks], 1):
+                    logger.info(f"{i}. {pick.get('selection', 'N/A')} ({pick.get('bet_type', 'N/A')})")
+                success = False
+            
+            # Broadcast via WebSocket if available
+            if WEBSOCKET_AVAILABLE:
+                try:
+                    broadcast_new_picks(picks)
+                except Exception as e:
+                    logger.debug(f"WebSocket broadcast failed: {e}")
             
             # Record sent picks
             if success:
@@ -445,7 +576,16 @@ class EnhancedHourlyPicksGenerator:
         except Exception as e:
             logger.error(f"Error sending hourly picks: {e}", exc_info=True)
             error_msg = f"❌ Error generating picks: {str(e)[:100]}"
-            self.sms_service.send_sms(error_msg)
+            if self.notification_service:
+                method = self.notification_method.lower()
+                if method == "sms":
+                    self.sms_service.send_sms(error_msg)
+                elif method == "imessage":
+                    self.imessage_service.send_message(error_msg)
+                elif method == "telegram":
+                    self.telegram_service.send_message(error_msg)
+                elif method == "email":
+                    self.email_service.send_email("❌ Error Generating Picks", error_msg)
             return False
     
     def __del__(self):
