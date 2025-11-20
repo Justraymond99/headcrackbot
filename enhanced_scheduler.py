@@ -171,6 +171,16 @@ def main():
     """Main scheduler function with all features."""
     logger.info("Starting enhanced hourly picks scheduler...")
     
+    # Initialize database if needed
+    try:
+        from models import init_db
+        logger.info("Initializing database...")
+        init_db()
+        logger.info("✅ Database initialized successfully")
+    except Exception as e:
+        logger.warning(f"Database initialization check failed: {e}")
+        # Try to continue anyway - database might already exist
+    
     # Start WebSocket server if enabled
     if WEBSOCKET_ENABLED:
         try:
