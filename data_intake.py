@@ -43,12 +43,11 @@ class DataIntake:
             logger.warning("Odds API key not configured. Using mock data.")
             return self._mock_odds_data(sport)
         
-        # If no markets specified, use comprehensive markets
+        # If no markets specified, use basic markets (API has limits)
         if markets is None:
-            # Determine sport abbreviation from API key
-            sport_abbr = self._get_sport_abbreviation(sport)
-            markets = get_comprehensive_markets_string(sport_abbr, include_player_props=False)
-            logger.info(f"Using comprehensive markets for {sport_abbr}: {markets[:100]}...")
+            # Use basic markets to avoid 422 errors (API limits)
+            markets = "h2h,spreads,totals"
+            logger.info(f"Using basic markets for {sport}: {markets}")
         
         url = f"{ODDS_API_BASE_URL}/sports/{sport}/odds"
         params = {
