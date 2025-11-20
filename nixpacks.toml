@@ -1,18 +1,13 @@
 # Nixpacks configuration for Railway
-# This tells Railway how to build the project
+# Railway will auto-detect Python, but this ensures SQLite is available
 
 [phases.setup]
-nixPkgs = ["python39", "sqlite"]
+nixPkgs = ["python3", "sqlite"]
 
 [phases.install]
 cmds = [
     "pip install --upgrade pip",
     "pip install -r requirements.txt"
-]
-
-[phases.build]
-cmds = [
-    "python init_database.py || true"
 ]
 
 [start]
