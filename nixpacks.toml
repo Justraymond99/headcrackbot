@@ -1,0 +1,20 @@
+# Nixpacks configuration for Railway
+# This tells Railway how to build the project
+
+[phases.setup]
+nixPkgs = ["python39", "sqlite"]
+
+[phases.install]
+cmds = [
+    "pip install --upgrade pip",
+    "pip install -r requirements.txt"
+]
+
+[phases.build]
+cmds = [
+    "python init_database.py || true"
+]
+
+[start]
+cmd = "python enhanced_scheduler.py"
+
