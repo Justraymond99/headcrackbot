@@ -251,7 +251,19 @@ def main():
     send_immediately = os.getenv("SEND_PICKS_ON_STARTUP", "false").lower() == "true"
     if send_immediately:
         logger.info("Sending picks immediately on startup...")
-        send_picks_job()
+        try:
+            send_picks_job()
+        except Exception as e:
+            logger.error(f"Error sending picks on startup: {e}", exc_info=True)
+    
+    # Also send parlays immediately if requested
+    send_parlays_immediately = os.getenv("SEND_PARLAYS_ON_STARTUP", "false").lower() == "true"
+    if send_parlays_immediately:
+        logger.info("Sending parlays immediately on startup...")
+        try:
+            send_parlays_job()
+        except Exception as e:
+            logger.error(f"Error sending parlays on startup: {e}", exc_info=True)
     
     try:
         logger.info("Scheduler started with all features enabled.")
