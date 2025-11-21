@@ -41,6 +41,7 @@ class DataIntake:
         """
         if not self.odds_api_key:
             logger.warning("Odds API key not configured. Using mock data.")
+            logger.debug(f"ODDS_API_KEY from config: {ODDS_API_KEY[:10] if ODDS_API_KEY else 'None'}...")
             return self._mock_odds_data(sport)
         
         # If no markets specified, use basic markets (API has limits)
@@ -58,6 +59,8 @@ class DataIntake:
         }
         
         try:
+            logger.debug(f"Fetching odds from: {url}")
+            logger.debug(f"API key present: {bool(self.odds_api_key)}")
             response = requests.get(url, params=params, timeout=10)
             response.raise_for_status()
             data = response.json()
@@ -65,6 +68,8 @@ class DataIntake:
             return data
         except requests.exceptions.RequestException as e:
             logger.error(f"Error fetching odds: {e}")
+            logger.error(f"Response status: {response.status_code if 'response' in locals() else 'N/A'}")
+            logger.error(f"Response text: {response.text[:200] if 'response' in locals() and hasattr(response, 'text') else 'N/A'}")
             return self._mock_odds_data(sport)
     
     def fetch_player_stats(self, sport: str, date: Optional[str] = None) -> List[Dict]:
