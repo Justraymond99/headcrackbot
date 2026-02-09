@@ -107,6 +107,74 @@ def send_parlays_job():
         logger.error(f"❌ Error in hourly parlays job: {e}", exc_info=True)
 
 
+def send_kalshi_picks_job():
+    """Hourly Kalshi prediction market picks job."""
+    kalshi_enabled = os.getenv("KALSHI_ENABLED", "true").lower() == "true"
+    if not kalshi_enabled:
+        return
+
+    logger.info("=" * 80)
+    logger.info(f"Running Kalshi picks job at {datetime.now()}")
+    logger.info("=" * 80)
+
+    try:
+        generator = EnhancedHourlyPicksGenerator()
+        if not generator.kalshi_analyzer:
+            logger.info("Kalshi analyzer not available, skipping")
+            return
+
+        picks = generator.generate_kalshi_picks(refresh=True)
+        if not picks:
+            logger.info("No Kalshi value picks found this hour")
+            return
+
+        # Format and send via configured notification
+        if generator.notification_service:
+            method = generator.notification_method.lower()
+            if method == "telegram":
+                success = generator.telegram_service.send_kalshi_picks_message(picks)
+            else:
+                # For other methods, format a simple text message
+                msg = _format_kalshi_text(picks)
+                if method == "sms":
+                    success = generator.sms_service.send_sms(msg)
+                elif method == "imessage":
+                    success = generator.imessage_service.send_message(msg)
+                elif method == "email":
+                    success = generator.email_service.send_email("Kalshi Picks", msg)
+                else:
+                    success = False
+
+            if success:
+                logger.info(f"Kalshi picks sent ({len(picks)} picks)")
+                if WEBSOCKET_ENABLED:
+                    try:
+                        broadcast_system_message("Kalshi picks sent successfully", "success")
+                    except Exception:
+                        pass
+            else:
+                logger.warning("Failed to send Kalshi picks")
+        else:
+            logger.info(f"Generated {len(picks)} Kalshi picks (no notification method configured)")
+
+    except Exception as e:
+        logger.error(f"Error in Kalshi picks job: {e}", exc_info=True)
+
+
+def _format_kalshi_text(picks, max_picks=5):
+    """Format Kalshi picks as plain text for SMS/email."""
+    lines = ["KALSHI PICKS\n"]
+    for i, p in enumerate(picks[:max_picks], 1):
+        side = p.get("side", "?")
+        title = p.get("market_title", "Unknown")
+        cost = p.get("cost_cents", 0)
+        ev = p.get("ev_cents", 0)
+        cat = p.get("category", "")
+        lines.append(f"{i}. {side} {title}")
+        lines.append(f"   {cost}c | EV: +{ev:.1f}c | {cat}")
+    return "\n".join(lines)
+
+
 def send_parlay_suggestions_job():
     """Send parlay suggestions (runs once per day)."""
     if os.getenv("ENABLE_PARLAY_SUGGESTIONS", "false").lower() != "true":
@@ -210,6 +278,15 @@ def main():
         replace_existing=True
     )
     
+    # Kalshi prediction market picks (every hour at :45)
+    scheduler.add_job(
+        send_kalshi_picks_job,
+        trigger=CronTrigger(minute=45),
+        id='kalshi_picks',
+        name='Send Kalshi prediction market picks',
+        replace_existing=True
+    )
+
     # Parlay suggestions (daily at 10 AM)
     parlay_hour = int(os.getenv("PARLAY_SUGGESTIONS_TIME", "10"))
     scheduler.add_job(
@@ -265,8 +342,17 @@ def main():
         except Exception as e:
             logger.error(f"Error sending parlays on startup: {e}", exc_info=True)
     
+    # Send Kalshi picks immediately if requested
+    send_kalshi_immediately = os.getenv("SEND_KALSHI_ON_STARTUP", "false").lower() == "true"
+    if send_kalshi_immediately:
+        logger.info("Sending Kalshi picks immediately on startup...")
+        try:
+            send_kalshi_picks_job()
+        except Exception as e:
+            logger.error(f"Error sending Kalshi picks on startup: {e}", exc_info=True)
+
     try:
-        logger.info("Scheduler started with all features enabled.")
+        logger.info("Scheduler started with all features enabled (including Kalshi).")
         logger.info("Press Ctrl+C to exit.")
         scheduler.start()
     except (KeyboardInterrupt, SystemExit):

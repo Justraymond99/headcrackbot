@@ -148,6 +148,20 @@ class TelegramService:
             potential_profit = pick.get("potential_profit", {})
             recommended_stake = pick.get("recommended_stake")
             
+            # Handle Kalshi prediction market picks inline
+            if bet_type == "kalshi_contract":
+                category = pick.get("category", "Kalshi")
+                side = pick.get("side", "")
+                market_title = pick.get("market_title", selection)
+                cost = pick.get("cost_cents", 0)
+                ev_cents = pick.get("ev_cents", 0)
+
+                pick_line = f"\n<b>{i}. 🔮 {side}</b> — {market_title}"
+                pick_line += f"\n   {category} | <b>{cost}¢</b> | EV: +{ev_cents:.1f}c | {conf_pct}%"
+
+                message_parts.append(pick_line)
+                continue
+
             if bet_type == "prop" and player_name:
                 prop_type_names = {
                     "player_points": "Pts",
@@ -155,7 +169,7 @@ class TelegramService:
                     "player_assists": "Ast",
                 }
                 readable_prop = prop_type_names.get(prop_type, prop_type.replace("player_", "").replace("_", " ").title())
-                
+
                 pick_line = f"\n<b>{i}. {sport}: {player_name} {readable_prop}</b>"
                 if prop_value:
                     pick_line += f"\n   {selection} {prop_value:.1f}"
@@ -163,7 +177,7 @@ class TelegramService:
                     pick_line += f"\n   {selection}"
             else:
                 pick_line = f"\n<b>{i}. {sport}: {selection}</b>"
-            
+
             pick_line += f"\n   <code>{game_info}</code>"
             pick_line += f"\n   {bet_type.upper()} | <b>{odds_str}</b> | {conf_pct}% | EV: {ev_pct}"
             
@@ -180,6 +194,84 @@ class TelegramService:
         message = "\n".join(message_parts)
         return self.send_message(message)
     
+    def send_kalshi_picks_message(self, picks: List[Dict], max_picks: int = 10) -> bool:
+        """
+        Format and send Kalshi prediction market picks as Telegram message.
+
+        Args:
+            picks: List of Kalshi pick dicts from KalshiAnalyzer.
+            max_picks: Maximum picks to include.
+
+        Returns:
+            True if sent successfully.
+        """
+        if not picks:
+            message = "<b>No Kalshi value picks found at this time. Check back later!</b>"
+            return self.send_message(message)
+
+        category_emoji = {
+            "Economics": "📈",
+            "Politics": "🏛",
+            "Climate and Weather": "🌦",
+            "Financials": "💹",
+            "Crypto": "₿",
+            "Sports": "⚽",
+            "Tech & Science": "🔬",
+            "Culture": "🎬",
+            "Companies": "🏢",
+            "Transportation": "✈️",
+            "Health": "🏥",
+            "Legal": "⚖️",
+            "Energy": "⚡",
+        }
+
+        message_parts = ["<b>🔮 KALSHI PREDICTION MARKET PICKS 🔮</b>\n"]
+
+        for i, pick in enumerate(picks[:max_picks], 1):
+            side = pick.get("side", "?")
+            market_title = pick.get("market_title", "Unknown")
+            event_title = pick.get("event_title", "")
+            category = pick.get("category", "Other")
+            cost = pick.get("cost_cents", 0)
+            ev_cents = pick.get("ev_cents", 0)
+            ev_pct = pick.get("expected_value", 0)
+            confidence = pick.get("confidence", 0)
+            volume = pick.get("volume", 0)
+            close_time = pick.get("close_time")
+
+            emoji = category_emoji.get(category, "📊")
+            conf_pct = int(confidence * 100)
+            ev_display = f"+{ev_cents:.1f}c"
+            payout = pick.get("payout_per_dollar", 0)
+
+            # Close time display
+            close_str = ""
+            if close_time:
+                if isinstance(close_time, str):
+                    try:
+                        from datetime import datetime as _dt
+                        close_time = _dt.fromisoformat(close_time.replace("Z", "+00:00")).replace(tzinfo=None)
+                    except Exception:
+                        close_time = None
+                if close_time:
+                    close_str = f" | Closes: {close_time.strftime('%b %d %I:%M %p')}"
+
+            pick_line = f"\n<b>{i}. {emoji} {side}</b> — {market_title}"
+            if event_title and event_title != market_title:
+                pick_line += f"\n   <code>{event_title}</code>"
+            pick_line += f"\n   {category} | <b>{cost}¢</b> | EV: {ev_display} | {conf_pct}%"
+            pick_line += f"\n   Vol: {volume:,}{close_str}"
+            if payout > 0:
+                pick_line += f"\n   💰 $1 → ${1 + payout:.2f} (+${payout:.2f})"
+
+            message_parts.append(pick_line)
+
+        if len(picks) > max_picks:
+            message_parts.append(f"\n<i>... and {len(picks) - max_picks} more Kalshi picks available</i>")
+
+        message = "\n".join(message_parts)
+        return self.send_message(message)
+
     def send_parlays_message(self, parlays_by_sport: Dict[str, List[Dict]], max_parlays_per_sport: int = 1) -> bool:
         """
         Format and send diverse parlays as Telegram message.
@@ -203,7 +295,8 @@ class TelegramService:
             "MLB": "⚾",
             "NHL": "🏒",
             "UFC": "🥊",
-            "BOXING": "🥊"
+            "BOXING": "🥊",
+            "KALSHI": "🔮",
         }
         
         for sport, parlays in parlays_by_sport.items():

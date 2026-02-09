@@ -482,6 +482,69 @@ class MarketEfficiency(Base):
     game = relationship("Game")
 
 
+class KalshiEvent(Base):
+    """Kalshi prediction market event (contains one or more markets)."""
+    __tablename__ = "kalshi_events"
+
+    id = Column(Integer, primary_key=True)
+    event_ticker = Column(String, unique=True, nullable=False)
+    series_ticker = Column(String)
+    title = Column(String, nullable=False)
+    subtitle = Column(String)
+    category = Column(String)  # Economics, Politics, Climate and Weather, etc.
+    mutually_exclusive = Column(Boolean, default=False)
+    status = Column(String, default="open")  # open, closed, settled
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    markets = relationship("KalshiMarket", back_populates="event", cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<KalshiEvent({self.event_ticker}: {self.title[:50]})>"
+
+
+class KalshiMarket(Base):
+    """Individual Kalshi binary contract market."""
+    __tablename__ = "kalshi_markets"
+
+    id = Column(Integer, primary_key=True)
+    ticker = Column(String, unique=True, nullable=False)
+    event_ticker = Column(String, nullable=False)
+    kalshi_event_id = Column(Integer, ForeignKey("kalshi_events.id"), nullable=False)
+    title = Column(String, nullable=False)
+    subtitle = Column(String)
+    category = Column(String)
+    market_type = Column(String, default="binary")  # binary
+
+    # Pricing (in cents, 1-99)
+    yes_bid = Column(Integer)
+    yes_ask = Column(Integer)
+    last_price = Column(Integer)
+
+    # Volume / liquidity
+    volume = Column(Integer, default=0)
+    volume_24h = Column(Integer, default=0)
+    open_interest = Column(Integer, default=0)
+
+    # Timing
+    close_time = Column(DateTime)
+
+    # Status / result
+    status = Column(String, default="open")  # open, closed, settled
+    result = Column(String)  # yes, no, null (for settled markets)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    event = relationship("KalshiEvent", back_populates="markets")
+
+    def __repr__(self):
+        return f"<KalshiMarket({self.ticker}: {self.title[:40]} bid={self.yes_bid} ask={self.yes_ask})>"
+
+
 class CustomStat(Base):
     """User-defined custom statistics."""
     __tablename__ = "custom_stats"
@@ -554,15 +617,15 @@ engine = create_engine(DATABASE_URL, echo=False)
 SessionLocal = sessionmaker(bind=engine)
 
 def init_db():
-    """Initialize the database with all tables."""
+    """Initialize the database with all tables (including Kalshi)."""
     # Import sent_pick to ensure its table is registered
     try:
         from sent_pick import SentPick
     except ImportError:
         pass
-    
+
     Base.metadata.create_all(engine)
-    print("Database initialized successfully!")
+    print("Database initialized successfully (sports + Kalshi tables)!")
 
 def get_db():
     """Get database session."""

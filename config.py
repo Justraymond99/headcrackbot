@@ -40,6 +40,16 @@ MIN_CONFIDENCE = float(os.getenv("MIN_CONFIDENCE", "0.6"))
 MAX_PARLAY_LEGS = int(os.getenv("MAX_PARLAY_LEGS", "15"))
 MIN_PARLAY_LEGS = int(os.getenv("MIN_PARLAY_LEGS", "2"))
 
+# Kalshi Prediction Market Configuration
+# Public market data requires NO API key. Auth only needed to place trades.
+KALSHI_API_BASE_URL = os.getenv("KALSHI_API_BASE_URL", "https://api.elections.kalshi.com/trade-api/v2")
+KALSHI_ENABLED = os.getenv("KALSHI_ENABLED", "true").lower() == "true"
+KALSHI_MIN_EV_CENTS = float(os.getenv("KALSHI_MIN_EV_CENTS", "3.0"))
+KALSHI_MIN_CONFIDENCE = float(os.getenv("KALSHI_MIN_CONFIDENCE", "0.55"))
+KALSHI_MIN_VOLUME = int(os.getenv("KALSHI_MIN_VOLUME", "50"))
+KALSHI_MAX_PICKS = int(os.getenv("KALSHI_MAX_PICKS", "10"))
+KALSHI_CATEGORIES = os.getenv("KALSHI_CATEGORIES", "")  # comma-separated, empty = all
+
 # API Endpoints
 SPORTSDATA_BASE_URL = "https://api.sportsdata.io/v3"
 ODDS_API_BASE_URL = "https://api.the-odds-api.com/v4"

@@ -14,6 +14,17 @@ import logging
 import time
 import os
 
+# Kalshi integration (optional — gracefully disabled if not available)
+try:
+    from kalshi_analyzer import KalshiAnalyzer
+    from config import (
+        KALSHI_ENABLED, KALSHI_MIN_EV_CENTS, KALSHI_MIN_CONFIDENCE,
+        KALSHI_MIN_VOLUME, KALSHI_MAX_PICKS, KALSHI_CATEGORIES,
+    )
+    KALSHI_AVAILABLE = True
+except ImportError:
+    KALSHI_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 # Try to import iMessage service (Mac only)
@@ -74,6 +85,15 @@ class EnhancedHourlyPicksGenerator:
             except Exception as e:
                 logger.debug(f"Could not initialize Telegram service: {e}")
         
+        # Kalshi prediction market analyzer
+        self.kalshi_analyzer = None
+        if KALSHI_AVAILABLE and KALSHI_ENABLED:
+            try:
+                self.kalshi_analyzer = KalshiAnalyzer()
+                logger.info("Kalshi prediction market integration enabled")
+            except Exception as e:
+                logger.debug(f"Could not initialize Kalshi analyzer: {e}")
+
         # Determine which notification method to use (priority order)
         self.notification_method = None
         self.notification_service = None
@@ -153,6 +173,68 @@ class EnhancedHourlyPicksGenerator:
         
         return filtered
     
+    def refresh_kalshi_data(self, retries: int = 3) -> bool:
+        """Refresh Kalshi market data."""
+        if not self.kalshi_analyzer:
+            return False
+
+        for attempt in range(retries):
+            try:
+                logger.info(f"Refreshing Kalshi market data (attempt {attempt + 1}/{retries})...")
+                stored = self.kalshi_analyzer.fetch_and_store_markets(max_pages=5)
+                logger.info(f"Kalshi data refreshed: {stored} markets stored/updated")
+                return True
+            except Exception as e:
+                logger.warning(f"Error refreshing Kalshi data (attempt {attempt + 1}): {e}")
+                if attempt < retries - 1:
+                    time.sleep((attempt + 1) * 2)
+                else:
+                    logger.error("Failed to refresh Kalshi data after all retries")
+                    return False
+        return False
+
+    def generate_kalshi_picks(
+        self,
+        min_ev_cents: float = None,
+        min_confidence: float = None,
+        max_picks: int = None,
+        categories: Optional[List[str]] = None,
+        refresh: bool = True,
+    ) -> List[Dict]:
+        """Generate value picks from Kalshi prediction markets.
+
+        Returns picks in a format compatible with the sports pick pipeline.
+        """
+        if not self.kalshi_analyzer:
+            return []
+
+        # Use config defaults if not overridden
+        if min_ev_cents is None:
+            min_ev_cents = KALSHI_MIN_EV_CENTS if KALSHI_AVAILABLE else 3.0
+        if min_confidence is None:
+            min_confidence = KALSHI_MIN_CONFIDENCE if KALSHI_AVAILABLE else 0.55
+        if max_picks is None:
+            max_picks = KALSHI_MAX_PICKS if KALSHI_AVAILABLE else 10
+        if categories is None and KALSHI_AVAILABLE and KALSHI_CATEGORIES:
+            categories = [c.strip() for c in KALSHI_CATEGORIES.split(",") if c.strip()]
+
+        if refresh:
+            self.refresh_kalshi_data()
+
+        try:
+            picks = self.kalshi_analyzer.find_value_contracts(
+                min_ev_cents=min_ev_cents,
+                min_confidence=min_confidence,
+                min_volume=KALSHI_MIN_VOLUME if KALSHI_AVAILABLE else 50,
+                max_picks=max_picks,
+                categories=categories if categories else None,
+            )
+            logger.info(f"Generated {len(picks)} Kalshi picks")
+            return picks
+        except Exception as e:
+            logger.error(f"Error generating Kalshi picks: {e}", exc_info=True)
+            return []
+
     def enhance_pick_with_line_shopping(self, pick: Dict) -> Dict:
         """Add best odds information from line shopping."""
         game = pick.get("game")
@@ -362,11 +444,22 @@ class EnhancedHourlyPicksGenerator:
             if filtered_count > 0:
                 logger.info(f"Filtered out {filtered_count} recently sent picks")
         
+        # --- Kalshi prediction market picks ---
+        if self.kalshi_analyzer:
+            try:
+                kalshi_picks = self.generate_kalshi_picks(refresh=refresh_odds)
+                if kalshi_picks:
+                    logger.info(f"Adding {len(kalshi_picks)} Kalshi picks to the mix")
+                    all_picks.extend(kalshi_picks)
+            except Exception as e:
+                logger.warning(f"Error generating Kalshi picks: {e}")
+
         # Enhance with line shopping if enabled
         if enable_line_shopping:
             for pick in all_picks:
-                self.enhance_pick_with_line_shopping(pick)
-        
+                if pick.get("source") != "kalshi":
+                    self.enhance_pick_with_line_shopping(pick)
+
         # Add potential earnings to picks
         from advanced_pick_features import AdvancedPickFeatures
         features = AdvancedPickFeatures()
