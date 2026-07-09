@@ -51,16 +51,26 @@ def poisson_pmf(k: int, lam: float) -> float:
 
 
 def poisson_cdf(k: int, lam: float) -> float:
-    return sum(poisson_pmf(i, lam) for i in range(k + 1))
+    if k < 0:
+        return 0.0
+    if lam <= 0:
+        return 1.0
+    # Sum the lower tail directly. This avoids accidentally assigning an omitted
+    # upper tail to the under probability for high-lambda markets.
+    return min(1.0, sum(poisson_pmf(i, lam) for i in range(k + 1)))
 
 
-def poisson_over_probability(line: float, lam: float, max_count: int = 15) -> float:
+def poisson_over_probability(line: float, lam: float, max_count: int | None = None) -> float:
     threshold = math.floor(line) + 1
-    return sum(poisson_pmf(k, lam) for k in range(threshold, max_count + 1))
+    # P(X > line) = 1 - P(X <= floor(line)). `max_count` is kept for backward
+    # compatibility but intentionally unused, because truncating the upper tail
+    # can be catastrophically wrong for high-total markets like corners/cards.
+    return max(0.0, 1.0 - poisson_cdf(threshold - 1, lam))
 
 
-def poisson_under_probability(line: float, lam: float, max_count: int = 15) -> float:
-    return 1.0 - poisson_over_probability(line, lam, max_count=max_count)
+def poisson_under_probability(line: float, lam: float, max_count: int | None = None) -> float:
+    threshold = math.floor(line)
+    return poisson_cdf(threshold, lam)
 
 
 def both_teams_to_score_probability(home_xg: float, away_xg: float) -> float:

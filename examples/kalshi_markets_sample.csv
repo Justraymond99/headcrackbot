@@ -1,0 +1,4 @@
+ticker,event_id,label,market_type,yes_price_cents,team,opponent,player,threshold
+KXARGQUALIFY,arg-egypt-r16,Argentina qualifies,qualify,82,Argentina,Egypt,,
+KXBTTSARGEGY,arg-egypt-r16,Argentina vs Egypt both teams score,both_teams_to_score,46,,,,
+KXOVER25ARGEGY,arg-egypt-r16,Argentina vs Egypt over 2.5 goals,total_goals,55,,,,2.5
