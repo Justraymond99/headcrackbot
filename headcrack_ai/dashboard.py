@@ -9,11 +9,11 @@ except Exception:  # pragma: no cover
     pd = None
     st = None
 
-from .explain import explain_card
-from .ingest import legs_to_rows, load_markets_csv, load_markets_json
-from .optimizer import build_card
-from .persistence import SQLiteStore
-from .probability import monte_carlo_soccer_match
+from headcrack_ai.explain import explain_card
+from headcrack_ai.ingest import legs_to_rows, load_markets_csv, load_markets_json
+from headcrack_ai.optimizer import build_card
+from headcrack_ai.persistence import SQLiteStore
+from headcrack_ai.probability import monte_carlo_soccer_match
 
 
 def run_dashboard() -> None:
