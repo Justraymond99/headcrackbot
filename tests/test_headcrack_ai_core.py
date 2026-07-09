@@ -1,6 +1,11 @@
 from headcrack_ai.models import AmericanOdds
 from headcrack_ai.optimizer import build_card
-from headcrack_ai.probability import both_teams_to_score_probability, monte_carlo_soccer_match
+from headcrack_ai.probability import (
+    both_teams_to_score_probability,
+    monte_carlo_soccer_match,
+    poisson_over_probability,
+    poisson_under_probability,
+)
 from headcrack_ai.ingest import load_markets_json
 from headcrack_ai.persistence import SQLiteStore
 from headcrack_ai.providers.kalshi_manual import cents_to_american, normalize_kalshi_rows
@@ -15,6 +20,17 @@ def test_american_odds_conversion():
 def test_btts_probability_range():
     p = both_teams_to_score_probability(1.8, 0.9)
     assert 0 <= p <= 1
+
+
+def test_poisson_over_probability_includes_upper_tail():
+    assert poisson_over_probability(2.5, 20) > 0.99
+    assert poisson_under_probability(2.5, 20) < 0.01
+
+
+def test_dashboard_imports_as_package():
+    import headcrack_ai.dashboard as dashboard
+
+    assert callable(dashboard.run_dashboard)
 
 
 def test_monte_carlo_soccer_match():
