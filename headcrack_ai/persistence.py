@@ -3,10 +3,10 @@ from __future__ import annotations
 import json
 import sqlite3
 from contextlib import contextmanager
-from dataclasses import asdict
 from pathlib import Path
 from typing import Iterator
 
+from .config import require_sqlite_url
 from .models import BetLeg, BetRecord, Market, Prediction, ResultStatus
 
 SCHEMA = """
@@ -68,13 +68,15 @@ CREATE TABLE IF NOT EXISTS odds_snapshots (
 CREATE INDEX IF NOT EXISTS idx_markets_event_id ON markets(event_id);
 CREATE INDEX IF NOT EXISTS idx_markets_sportsbook ON markets(sportsbook);
 CREATE INDEX IF NOT EXISTS idx_predictions_market_id ON predictions(market_id);
+CREATE INDEX IF NOT EXISTS idx_predictions_market_created ON predictions(market_id, created_at, id);
 CREATE INDEX IF NOT EXISTS idx_odds_snapshots_market_id ON odds_snapshots(market_id);
 """
 
 
 class SQLiteStore:
     def __init__(self, database_url: str | Path = "headcrack_ai.sqlite3") -> None:
-        self.path = Path(str(database_url).replace("sqlite:///", ""))
+        database_url = require_sqlite_url(str(database_url))
+        self.path = Path(database_url.replace("sqlite:///", ""))
         self.path.parent.mkdir(parents=True, exist_ok=True) if self.path.parent != Path(".") else None
 
     @contextmanager
@@ -214,6 +216,15 @@ class SQLiteStore:
         with self.connect() as conn:
             rows = conn.execute(
                 """
+                WITH latest_predictions AS (
+                    SELECT p.*
+                    FROM predictions p
+                    JOIN (
+                        SELECT market_id, MAX(id) AS latest_id
+                        FROM predictions
+                        GROUP BY market_id
+                    ) latest ON latest.latest_id = p.id
+                )
                 SELECT
                     m.market_id,
                     m.label,
@@ -230,7 +241,7 @@ class SQLiteStore:
                         ELSE ABS(m.odds) / (ABS(m.odds) + 100.0)
                     END) AS edge
                 FROM markets m
-                JOIN predictions p ON p.market_id = m.market_id
+                JOIN latest_predictions p ON p.market_id = m.market_id
                 ORDER BY edge DESC, p.created_at DESC
                 LIMIT ?
                 """,
