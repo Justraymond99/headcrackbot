@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..models import AmericanOdds, Market, MarketType, Sport
+from ..probability import decimal_to_american
 
 
 @dataclass(frozen=True)
@@ -50,7 +51,20 @@ def _market_type_from_key(key: str) -> MarketType:
     return MarketType.CUSTOM
 
 
-def normalize_odds_api_events(events: list[dict[str, Any]], sport: Sport = Sport.SOCCER) -> list[Market]:
+def _american_price(price: int | float, odds_format: str = "american") -> int:
+    normalized_format = odds_format.lower()
+    if normalized_format == "american":
+        return int(price)
+    if normalized_format == "decimal":
+        return decimal_to_american(float(price))
+    raise ValueError(f"Unsupported Odds API odds format: {odds_format}")
+
+
+def normalize_odds_api_events(
+    events: list[dict[str, Any]],
+    sport: Sport = Sport.SOCCER,
+    odds_format: str = "american",
+) -> list[Market]:
     markets: list[Market] = []
     for event in events:
         event_id = str(event.get("id"))
@@ -79,7 +93,7 @@ def normalize_odds_api_events(events: list[dict[str, Any]], sport: Sport = Sport
                             label=label,
                             market_type=market_type,
                             sportsbook=sportsbook,
-                            odds=AmericanOdds(int(price)),
+                            odds=AmericanOdds(_american_price(price, odds_format=odds_format)),
                             team=outcome_name if market_type in {MarketType.MONEYLINE, MarketType.SPREAD} else None,
                             opponent=away_team if outcome_name == home_team else home_team,
                             threshold=float(point) if point is not None else None,
@@ -89,6 +103,8 @@ def normalize_odds_api_events(events: list[dict[str, Any]], sport: Sport = Sport
                                 "away_team": away_team,
                                 "commence_time": event.get("commence_time"),
                                 "market_key": market_key,
+                                "odds_format": odds_format,
+                                "raw_price": price,
                             },
                         )
                     )
