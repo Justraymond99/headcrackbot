@@ -1,3 +1,10 @@
+import os
+from dataclasses import replace
+from datetime import timedelta
+
+import pytest
+
+from headcrack_ai.config import HeadcrackConfig
 from headcrack_ai.models import AmericanOdds
 from headcrack_ai.optimizer import build_card
 from headcrack_ai.probability import (
@@ -15,6 +22,19 @@ from headcrack_ai.providers.odds_api import normalize_odds_api_events
 def test_american_odds_conversion():
     assert round(AmericanOdds(+100).decimal, 2) == 2.0
     assert round(AmericanOdds(-200).implied_probability, 2) == 0.67
+
+
+def test_config_rejects_non_sqlite_database_url(monkeypatch):
+    monkeypatch.delenv("HEADCRACK_DATABASE_URL", raising=False)
+    monkeypatch.setenv("DATABASE_URL", "postgres://user:pass@example.com/db")
+    with pytest.raises(ValueError):
+        HeadcrackConfig.from_env()
+
+
+def test_config_accepts_headcrack_sqlite_override(monkeypatch):
+    monkeypatch.setenv("HEADCRACK_DATABASE_URL", "sqlite:///tmp/headcrack.sqlite3")
+    monkeypatch.setenv("DATABASE_URL", "postgres://user:pass@example.com/db")
+    assert HeadcrackConfig.from_env().database_url == "sqlite:///tmp/headcrack.sqlite3"
 
 
 def test_btts_probability_range():
@@ -53,6 +73,40 @@ def test_sqlite_store_round_trip(tmp_path):
     board = store.value_board(limit=10)
     assert len(board) >= 2
     assert "edge" in board[0]
+
+
+def test_value_board_only_shows_latest_prediction_per_market(tmp_path):
+    store = SQLiteStore(tmp_path / "headcrack.sqlite3")
+    store.initialize()
+    leg = load_markets_json("examples/markets_argentina_egypt.json")[0]
+    store.save_leg(leg)
+    store.save_leg(leg)
+    board = store.value_board(limit=10)
+    matching = [row for row in board if row["market_id"] == leg.market.market_id]
+    assert len(matching) == 1
+
+
+def test_value_board_selects_latest_prediction_by_timestamp_not_insert_order(tmp_path):
+    store = SQLiteStore(tmp_path / "headcrack.sqlite3")
+    store.initialize()
+    leg = load_markets_json("examples/markets_argentina_egypt.json")[0]
+    older_prediction = replace(
+        leg.prediction,
+        model_probability=0.10,
+        created_at=leg.prediction.created_at - timedelta(days=1),
+    )
+    newer_prediction = replace(
+        leg.prediction,
+        model_probability=0.90,
+        created_at=leg.prediction.created_at,
+    )
+
+    store.upsert_market(leg.market)
+    store.insert_prediction(newer_prediction)
+    store.insert_prediction(older_prediction)
+
+    row = next(row for row in store.value_board(limit=10) if row["market_id"] == leg.market.market_id)
+    assert row["model_probability"] == 0.90
 
 
 def test_kalshi_manual_adapter():
@@ -97,3 +151,24 @@ def test_odds_api_normalizer():
     markets = normalize_odds_api_events(events)
     assert len(markets) == 2
     assert markets[0].sportsbook == "fanduel"
+
+
+def test_odds_api_decimal_prices_are_converted_to_american():
+    events = [
+        {
+            "id": "event1",
+            "home_team": "Home",
+            "away_team": "Away",
+            "bookmakers": [
+                {
+                    "key": "fanduel",
+                    "markets": [
+                        {"key": "h2h", "outcomes": [{"name": "Home", "price": 1.91}]}
+                    ],
+                }
+            ],
+        }
+    ]
+    markets = normalize_odds_api_events(events, odds_format="decimal")
+    assert markets[0].odds.value == -110
+    assert 0.52 <= markets[0].odds.implied_probability <= 0.53

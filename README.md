@@ -1,193 +1,269 @@
-# Sports Betting Parlay System
+# Headcrack AI
 
-A comprehensive system for analyzing sports betting data, generating optimal parlays, and tracking performance.
+Headcrack AI is a sports betting decision-support engine for finding, explaining, and tracking positive expected value opportunities.
 
-## Features
+The system is built around a simple idea: do not chase random parlays. Convert market prices into implied probabilities, estimate true probabilities with models, compare the two, and build cards only when the legs fit the same game script.
 
-### 1. Data Intake
-- Fetches odds, spreads, moneylines, and totals from The Odds API
-- Retrieves player stats and injury reports from SportsData.io
-- Stores team streaks and advanced statistics
-- Supports multiple sports (NBA, NFL, MLB, NHL)
+> Educational analytics project. Not financial advice. No model can guarantee profitable betting.
 
-### 2. Research Engine
-- Customizable logic with configurable weights
-- Expected value calculations
-- Confidence scoring system
-- Automatic parlay building with correlation analysis
-- Diversification optimization
+## What It Does
 
-### 3. Output & Dashboard
-- Streamlit web dashboard for visualization
-- Terminal output with detailed parlay information
-- Daily reports with performance metrics
-- Export capabilities (Notion, Google Sheets - optional)
+- Ingests manual market files, Kalshi-style exported rows, and allowed official odds feeds
+- Converts American and decimal odds into normalized American prices
+- Stores markets, predictions, odds snapshots, bet legs, and bet records in SQLite
+- Calculates implied probability, model edge, expected value, and EV per dollar
+- Runs soccer-focused Poisson and Monte Carlo simulations
+- Builds parlay cards by target payout band
+- Scores parlays by correlation, risk, adjusted hit probability, and expected value
+- Tracks bankroll, bet records, results, ROI, and market performance
+- Provides a CLI and Streamlit dashboard for daily workflow
 
-### 4. Result Tracker
-- Win/Loss tracking per leg and parlay
-- Hit rate calculations
-- ROI percentage tracking
-- Performance trends and graphs
-- Daily summary reports
+## Current Status
 
-### 5. Control Panel
-- Manual parlay selection and locking
-- Stake management
-- Override capabilities
-- Status tracking
+The project now has a production-shaped Headcrack AI foundation:
 
-### 6. Machine Learning (Optional)
-- ML models for probability estimation
-- Monte Carlo simulations
-- Bayesian probability updates
-- Historical data training
+- Core probability engine
+- Soccer simulation engine
+- EV parlay optimizer
+- SQLite persistence layer
+- Official The Odds API adapter
+- Manual Kalshi adapter
+- Dashboard with persistence-backed value board
+- CLI commands for ingestion, odds fetching, card generation, and value-board review
+- Regression tests for probability, provider adapters, persistence, config safety, and dashboard imports
 
-## Installation
+## Architecture
 
-1. Clone or download this repository
+```text
+headcrack_ai/
+├── bankroll.py          # staking, fractional Kelly, ROI summaries
+├── cli.py               # command-line workflow
+├── config.py            # environment-backed config with SQLite guardrails
+├── dashboard.py         # Streamlit dashboard
+├── explain.py           # human-readable card and leg explanations
+├── ingest.py            # manual JSON/CSV market ingestion
+├── models.py            # domain models: markets, predictions, legs, parlays, records
+├── optimizer.py         # EV/correlation/risk parlay builder
+├── persistence.py       # SQLite schema and store
+├── probability.py       # odds conversion, Poisson, Monte Carlo, ensemble utilities
+├── services.py          # app/service coordination layer
+└── providers/
+    ├── kalshi_manual.py # manual/exported Kalshi-style market rows
+    └── odds_api.py      # The Odds API adapter and normalizer
+```
 
-2. Install dependencies:
+## Install
+
 ```bash
+git clone https://github.com/Justraymond99/headcrackbot.git
+cd headcrackbot
 pip install -r requirements.txt
 ```
 
-3. Set up environment variables:
-```bash
-cp .env.example .env
-# Edit .env with your API keys
-```
+If the repo does not yet include all optional dashboard/test dependencies, install them directly:
 
-4. Initialize the database:
 ```bash
-python main.py init
+pip install streamlit pandas pytest
 ```
 
 ## Configuration
 
-Edit `.env` file with your API keys:
-- `SPORTSDATA_API_KEY`: Your SportsData.io API key
-- `ODDS_API_KEY`: Your The Odds API key
-- `DATABASE_URL`: PostgreSQL or SQLite connection string
+Headcrack AI currently supports SQLite persistence only.
 
-## Usage
-
-### Command Line Interface
-
-**Initialize database:**
 ```bash
-python main.py init
+export HEADCRACK_DATABASE_URL="sqlite:///headcrack_ai.sqlite3"
+export ODDS_API_KEY="your_the_odds_api_key"
+export ODDS_API_REGIONS="us"
+export ODDS_API_FORMAT="american"
 ```
 
-**Fetch latest data:**
+Important: non-SQLite `DATABASE_URL` values are rejected until a Postgres backend exists. Use `HEADCRACK_DATABASE_URL` for the app database.
+
+## Quick Start
+
+Initialize local persistence:
+
 ```bash
-python main.py fetch --sports NBA NFL
+python -m headcrack_ai.cli init-db
 ```
 
-**Generate parlays:**
+Ingest a sample market card:
+
 ```bash
-python main.py generate --sports NBA --max 10
+python -m headcrack_ai.cli ingest --input examples/markets_argentina_egypt.json
 ```
 
-**View performance:**
+View the stored value board:
+
 ```bash
-python main.py performance --days 30
+python -m headcrack_ai.cli value-board
 ```
 
-**Launch dashboard:**
+Build a betting card from a file:
+
 ```bash
-python main.py dashboard
+python -m headcrack_ai.cli build-card --input examples/markets_argentina_egypt.json --budget 20
 ```
 
-### Web Dashboard
+Run a soccer Monte Carlo simulation:
 
-Launch the Streamlit dashboard:
 ```bash
-streamlit run dashboard.py
+python -m headcrack_ai.cli simulate-soccer --home-xg 1.8 --away-xg 0.9 --simulations 50000
 ```
 
-Or use the CLI:
+Fetch odds from The Odds API, where allowed by your API plan and terms:
+
 ```bash
-python main.py dashboard
+python -m headcrack_ai.cli fetch-odds --sport-key soccer_fifa_world_cup
 ```
 
-The dashboard provides:
-- Real-time parlay generation
-- Visual performance analytics
-- Manual result entry
-- Parlay locking interface
-- Settings configuration
+Launch the dashboard:
 
-## Workflow
+```bash
+streamlit run headcrack_ai/dashboard.py
+```
 
-1. **Fetch Data**: Pull latest odds and stats
-   ```bash
-   python main.py fetch
-   ```
+## Market Input Format
 
-2. **Generate Parlays**: Create top-value parlay combinations
-   ```bash
-   python main.py generate --max 10
-   ```
+Manual JSON rows look like this:
 
-3. **Review & Lock**: Use dashboard to review and lock final picks
+```json
+{
+  "market_id": "messi-2-shots",
+  "sport": "soccer",
+  "event_id": "arg-egypt-r16",
+  "label": "Lionel Messi 2+ shots",
+  "market_type": "player_shots",
+  "sportsbook": "manual",
+  "odds": -180,
+  "team": "Argentina",
+  "player": "Lionel Messi",
+  "threshold": 1.5,
+  "model_probability": 0.73,
+  "model_name": "manual_player_prop",
+  "confidence": 0.68,
+  "tags": "argentina_control|attacking_volume"
+}
+```
 
-4. **Update Results**: After games, enter results to track performance
+Tags matter because the optimizer rewards parlays that tell one coherent story, such as `argentina_control`, `attacking_volume`, `goals`, `pressure`, or `underdog_counter`.
 
-5. **Analyze**: View performance trends and ROI
+## Core Concepts
 
-## Customization
+### Implied Probability
 
-### Adjusting Research Engine Weights
+A sportsbook price is converted into the probability the book is implying.
 
-Edit `config.py` or use the dashboard settings to adjust:
-- Value weight (expected value importance)
-- Confidence weight (confidence score importance)
-- Correlation weight (diversification penalty)
-- Diversification weight (bonus for more legs)
+```text
+American -200 -> implied probability ≈ 66.7%
+American +150 -> implied probability = 40.0%
+```
 
-### Custom Logic
+### Edge
 
-Modify `research_engine.py`:
-- `calculate_confidence_score()`: Your confidence calculation
-- `estimate_true_probability()`: Your probability model
-- `calculate_expected_value()`: EV calculation method
+```text
+edge = model_probability - implied_probability
+```
 
-### ML Models
+If the model says an outcome should happen 58% of the time and the market implies 50%, the edge is +8%.
 
-Enhance `ml_models.py`:
-- Train models on historical data
-- Implement custom simulation methods
-- Add Bayesian updates with evidence
+### Expected Value
 
-## Database Schema
+```text
+EV = probability * profit - miss_probability * stake
+```
 
-- **games**: Game/matchup information with odds
-- **player_stats**: Player statistics and injuries
-- **team_stats**: Team performance and streaks
-- **legs**: Individual bet legs
-- **parlays**: Parlay combinations
-- **daily_reports**: Daily performance summaries
+A bet can lose often and still be good if the payout is mispriced. A bet can also feel safe and still be bad if the price is too expensive.
 
-## API Integration
+### Correlated Parlays
+
+The optimizer prefers legs that support the same game script.
+
+Good story:
+
+```text
+Argentina control + Messi shots + Argentina corners + Over team pressure
+```
+
+Bad story:
+
+```text
+Favorite clean sheet + underdog goal + unrelated longshot prop
+```
+
+## Dashboard
+
+The Streamlit dashboard includes:
+
+- Uploadable market files
+- Uploaded value board
+- Save-to-SQLite workflow
+- Stored value board
+- Generated cards by target payout band
+- Soccer simulation tab
+
+Run it with:
+
+```bash
+streamlit run headcrack_ai/dashboard.py
+```
+
+## Persistence
+
+SQLite tables include:
+
+- `markets`
+- `predictions`
+- `bet_legs`
+- `bet_records`
+- `odds_snapshots`
+
+The stored value board only shows the latest prediction per market, so repeated imports do not flood the board with stale duplicate edges.
+
+## Provider Support
 
 ### The Odds API
-- Free tier: 500 requests/month
-- Endpoints: Odds, spreads, totals
-- Documentation: https://the-odds-api.com/
 
-### SportsData.io
-- Various subscription tiers
-- Endpoints: Stats, injuries, standings
-- Documentation: https://sportsdata.io/
+The adapter uses official API endpoints and supports American or decimal source prices. Decimal prices are converted before storage so implied probabilities stay correct.
 
-## Notes
+### Kalshi
 
-- The system uses mock data when API keys are not configured
-- SQLite is used by default (change in `.env` for PostgreSQL)
-- All odds are in American format
-- Confidence scores range from 0.0 to 1.0
+Kalshi is manual/export-first for now. Use CSV rows containing tickers, labels, YES prices, and market metadata unless an official integration is explicitly added.
 
-## License
+## Testing
 
-This project is for educational purposes. Please gamble responsibly.
+```bash
+pytest tests/test_headcrack_ai_core.py
+```
 
+Current test coverage includes:
+
+- odds conversion
+- config guardrails
+- Poisson upper-tail totals
+- Monte Carlo output sanity
+- card generation
+- SQLite persistence round trip
+- latest-prediction value-board de-duping
+- Kalshi manual adapter
+- The Odds API normalizer
+- decimal odds conversion
+- dashboard importability
+
+## Roadmap
+
+Next build targets:
+
+- Historical feature store
+- Soccer player shot model
+- Shot-on-target model
+- Cards/corners models
+- Model calibration reports
+- Real bet-result import workflow
+- Postgres store backend
+- Automated daily report generation
+- LLM-generated card explanations
+
+## Responsible Use
+
+This system is for analytics, education, and decision support. Keep bankroll limits, track every result, and avoid increasing stake size to chase losses.

@@ -48,7 +48,7 @@ class HeadcrackAIService:
             markets=markets,
             odds_format=self.config.default_odds_format,
         )
-        market_rows = normalize_odds_api_events(events)
+        market_rows = normalize_odds_api_events(events, odds_format=self.config.default_odds_format)
         for market in market_rows:
             self.store.upsert_market(market)
             # Baseline prediction uses the book probability until a real model overwrites it.
