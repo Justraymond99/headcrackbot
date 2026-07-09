@@ -216,14 +216,19 @@ class SQLiteStore:
         with self.connect() as conn:
             rows = conn.execute(
                 """
-                WITH latest_predictions AS (
-                    SELECT p.*
+                WITH ranked_predictions AS (
+                    SELECT
+                        p.*,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY p.market_id
+                            ORDER BY p.created_at DESC, p.id DESC
+                        ) AS prediction_rank
                     FROM predictions p
-                    JOIN (
-                        SELECT market_id, MAX(id) AS latest_id
-                        FROM predictions
-                        GROUP BY market_id
-                    ) latest ON latest.latest_id = p.id
+                ),
+                latest_predictions AS (
+                    SELECT *
+                    FROM ranked_predictions
+                    WHERE prediction_rank = 1
                 )
                 SELECT
                     m.market_id,
