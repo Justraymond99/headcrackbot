@@ -1,4 +1,6 @@
 import os
+from dataclasses import replace
+from datetime import timedelta
 
 import pytest
 
@@ -82,6 +84,29 @@ def test_value_board_only_shows_latest_prediction_per_market(tmp_path):
     board = store.value_board(limit=10)
     matching = [row for row in board if row["market_id"] == leg.market.market_id]
     assert len(matching) == 1
+
+
+def test_value_board_selects_latest_prediction_by_timestamp_not_insert_order(tmp_path):
+    store = SQLiteStore(tmp_path / "headcrack.sqlite3")
+    store.initialize()
+    leg = load_markets_json("examples/markets_argentina_egypt.json")[0]
+    older_prediction = replace(
+        leg.prediction,
+        model_probability=0.10,
+        created_at=leg.prediction.created_at - timedelta(days=1),
+    )
+    newer_prediction = replace(
+        leg.prediction,
+        model_probability=0.90,
+        created_at=leg.prediction.created_at,
+    )
+
+    store.upsert_market(leg.market)
+    store.insert_prediction(newer_prediction)
+    store.insert_prediction(older_prediction)
+
+    row = next(row for row in store.value_board(limit=10) if row["market_id"] == leg.market.market_id)
+    assert row["model_probability"] == 0.90
 
 
 def test_kalshi_manual_adapter():
