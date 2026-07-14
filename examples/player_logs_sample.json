@@ -1,0 +1,9 @@
+{
+  "logs": [
+    {"player": "Lionel Messi", "team": "Argentina", "opponent": "Chile", "event_id": "g1", "game_date": "2026-06-01", "minutes": 90, "shots": 4, "shots_on_target": 2, "goals": 1, "assists": 0, "is_home": 1},
+    {"player": "Lionel Messi", "team": "Argentina", "opponent": "Peru", "event_id": "g2", "game_date": "2026-06-05", "minutes": 90, "shots": 3, "shots_on_target": 1, "goals": 0, "assists": 1, "is_home": 0},
+    {"player": "Lionel Messi", "team": "Argentina", "opponent": "Brazil", "event_id": "g3", "game_date": "2026-06-10", "minutes": 85, "shots": 5, "shots_on_target": 3, "goals": 2, "assists": 0, "is_home": 1},
+    {"player": "Lionel Messi", "team": "Argentina", "opponent": "Uruguay", "event_id": "g4", "game_date": "2026-06-15", "minutes": 90, "shots": 2, "shots_on_target": 1, "goals": 0, "assists": 1, "is_home": 0},
+    {"player": "Lionel Messi", "team": "Argentina", "opponent": "Colombia", "event_id": "g5", "game_date": "2026-06-20", "minutes": 90, "shots": 4, "shots_on_target": 2, "goals": 1, "assists": 1, "is_home": 1}
+  ]
+}

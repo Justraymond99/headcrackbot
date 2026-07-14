@@ -4,7 +4,7 @@ import csv
 from pathlib import Path
 from typing import Any
 
-from ..models import AmericanOdds, Market, MarketType, Sport
+from ..models import AmericanOdds, Market, MarketType, Sport, VenueType
 
 
 def cents_to_american(yes_price_cents: float) -> int:
@@ -43,6 +43,7 @@ def normalize_kalshi_rows(rows: list[dict[str, Any]], sport: Sport = Sport.SOCCE
                 player=row.get("player") or None,
                 threshold=float(row["threshold"]) if row.get("threshold") not in (None, "") else None,
                 metadata={"source": "kalshi_manual", **row},
+                venue_type=VenueType.PREDICTION_MARKET,
             )
         )
     return markets

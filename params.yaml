@@ -1,0 +1,7 @@
+train:
+  model_name: soccer_moneyline
+  model_version: v1
+  max_brier: 0.28
+
+features:
+  window: 5

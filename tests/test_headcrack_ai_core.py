@@ -25,16 +25,31 @@ def test_american_odds_conversion():
 
 
 def test_config_rejects_non_sqlite_database_url(monkeypatch):
-    monkeypatch.delenv("HEADCRACK_DATABASE_URL", raising=False)
-    monkeypatch.setenv("DATABASE_URL", "postgres://user:pass@example.com/db")
+    monkeypatch.setenv("HEADCRACK_DATABASE_URL", "postgres://user:pass@example.com/db")
+    monkeypatch.setenv("ODDS_API_KEY", "test-key")
+    from headcrack_ai.settings import get_settings
+
+    get_settings.cache_clear()
     with pytest.raises(ValueError):
         HeadcrackConfig.from_env()
+    get_settings.cache_clear()
 
 
 def test_config_accepts_headcrack_sqlite_override(monkeypatch):
     monkeypatch.setenv("HEADCRACK_DATABASE_URL", "sqlite:///tmp/headcrack.sqlite3")
     monkeypatch.setenv("DATABASE_URL", "postgres://user:pass@example.com/db")
+    from headcrack_ai.settings import get_settings
+
+    get_settings.cache_clear()
     assert HeadcrackConfig.from_env().database_url == "sqlite:///tmp/headcrack.sqlite3"
+    get_settings.cache_clear()
+
+
+def test_prediction_markets_default_to_disabled(monkeypatch):
+    monkeypatch.delenv("ENABLE_PREDICTION_MARKETS", raising=False)
+    from headcrack_ai.settings import Settings
+
+    assert Settings(_env_file=None).enable_prediction_markets is False
 
 
 def test_btts_probability_range():
@@ -84,6 +99,22 @@ def test_value_board_only_shows_latest_prediction_per_market(tmp_path):
     board = store.value_board(limit=10)
     matching = [row for row in board if row["market_id"] == leg.market.market_id]
     assert len(matching) == 1
+
+
+def test_save_leg_does_not_duplicate_identical_bet_leg_index_rows(tmp_path):
+    store = SQLiteStore(tmp_path / "headcrack.sqlite3")
+    store.initialize()
+    leg = load_markets_json("examples/markets_argentina_egypt.json")[0]
+
+    store.save_leg(leg)
+    store.save_leg(leg)
+
+    with store.connect() as conn:
+        count = conn.execute(
+            "SELECT COUNT(*) FROM bet_legs WHERE market_id = ?",
+            (leg.market.market_id,),
+        ).fetchone()[0]
+    assert count == 1
 
 
 def test_value_board_selects_latest_prediction_by_timestamp_not_insert_order(tmp_path):
@@ -172,3 +203,46 @@ def test_odds_api_decimal_prices_are_converted_to_american():
     markets = normalize_odds_api_events(events, odds_format="decimal")
     assert markets[0].odds.value == -110
     assert 0.52 <= markets[0].odds.implied_probability <= 0.53
+
+
+def test_odds_api_player_props_preserve_player_and_market_type():
+    events = [
+        {
+            "id": "world-cup-event",
+            "home_team": "Argentina",
+            "away_team": "Spain",
+            "bookmakers": [
+                {
+                    "key": "fanduel",
+                    "markets": [
+                        {
+                            "key": "player_shots",
+                            "outcomes": [
+                                {
+                                    "name": "Over",
+                                    "description": "Lionel Messi",
+                                    "price": -115,
+                                    "point": 2.5,
+                                },
+                                {
+                                    "name": "Under",
+                                    "description": "Lionel Messi",
+                                    "price": -105,
+                                    "point": 2.5,
+                                },
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+    ]
+
+    markets = normalize_odds_api_events(events, league="World Cup")
+
+    assert len(markets) == 2
+    assert markets[0].market_type.value == "player_shots"
+    assert markets[0].player == "Lionel Messi"
+    assert markets[0].threshold == 2.5
+    assert "Lionel Messi Over 2.5 shots" in markets[0].label
+    assert markets[0].metadata["league"] == "World Cup"

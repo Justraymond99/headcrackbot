@@ -2,6 +2,24 @@
 
 Headcrack AI is a sports intelligence and betting decision-support platform. The goal is not to guess games randomly. The goal is to combine odds, market prices, statistical models, simulations, and bet tracking to find positive expected value opportunities.
 
+> **Execution plan:** See [HEADCRACK_AI_SPRINT_PLAN.md](./HEADCRACK_AI_SPRINT_PLAN.md) for the locked 9-sprint build (Sprint 1 → Sprint 9).
+
+## Locked sprint overview
+
+| Sprint | Goal |
+| ------ | ---- |
+| **1** | Production hardening — CI, Docker, logging, config, Alembic, retries |
+| **2** | Historical warehouse & normalized database |
+| **3** | Feature engineering pipeline |
+| **4** | Classical ML models (LightGBM / XGBoost / CatBoost) |
+| **5** | Ensemble engine + calibration |
+| **6** | Backtesting engine |
+| **7** | MLOps (DVC / MLflow, training, registry, deployment) |
+| **8** | Daily automation, reporting, APIs |
+| **9** | AI explanation layer |
+
+**Current focus:** Soccer. **Next up:** Sprint 1.
+
 ## Core Mission
 
 Build a system that can answer:
@@ -193,21 +211,31 @@ Dashboard sections:
 
 ## V2 Build Plan
 
-- Add historical soccer player features
-- Train player shot model
-- Train player shot-on-target model
-- Add market movement tracking
-- Add Monte Carlo simulator
-- Add automated explanations
+- [x] Add historical soccer player features (`feature_store.py`)
+- [x] Train player shot model (`shot_model.py`, Poisson rate from feature store)
+- [ ] Train player shot-on-target model
+- [ ] Add market movement tracking
+- [x] Add Monte Carlo simulator (`probability.monte_carlo_soccer_match`)
+- [x] Add automated explanations (`llm_explain.py`, `daily_report.py`)
 
 ## V3 Build Plan
 
-- Ensemble model
-- Automated odds scraping where allowed
-- Live odds movement alerts
-- Discord or Telegram bot
-- LLM-generated betting card summaries
-- Model retraining pipeline
+- [ ] Ensemble model
+- [ ] Automated odds scraping where allowed
+- [ ] Live odds movement alerts
+- [ ] Discord or Telegram bot
+- [x] LLM-generated betting card summaries (`llm_explain.py`)
+- [ ] Model retraining pipeline
+
+## Delivered Since V1
+
+- Real bet-result import workflow with automatic parlay settlement (`results.py`)
+- Tracking and feedback reports: ROI by market/sport/sportsbook, hit rate by
+  confidence bucket, best/worst models (`reports.py`)
+- Model calibration reports: reliability bins, Brier score, log loss, ECE
+  (`calibration.py`)
+- Automated daily report generation combining card, narrative, tracking, and
+  calibration (`daily_report.py`)
 
 ## Guardrails
 

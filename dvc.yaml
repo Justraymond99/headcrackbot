@@ -1,0 +1,11 @@
+stages:
+  features:
+    cmd: python -m headcrack_ai.cli init-warehouse
+  train:
+    cmd: python -m headcrack_ai.cli train-model
+    deps:
+      - features
+  evaluate:
+    cmd: python -m headcrack_ai.cli evaluate-model
+    deps:
+      - train

@@ -1,0 +1,35 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    command: python -m headcrack_ai.api.app
+
+  dashboard:
+    build: .
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    command: python -m streamlit run headcrack_ai/dashboard.py --server.address=0.0.0.0
+
+  postgres:
+    image: postgres:16-alpine
+    profiles: ["warehouse"]
+    environment:
+      POSTGRES_USER: headcrack
+      POSTGRES_PASSWORD: headcrack
+      POSTGRES_DB: headcrack
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

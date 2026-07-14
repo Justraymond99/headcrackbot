@@ -1,0 +1,8 @@
+{
+  "logs": [
+    {"team": "Egypt", "opponent": "Ghana", "event_id": "e1", "game_date": "2026-06-02", "goals_for": 1, "goals_against": 1, "shots_for": 9, "shots_against": 15, "corners_for": 4, "corners_against": 7, "is_home": 0},
+    {"team": "Egypt", "opponent": "Senegal", "event_id": "e2", "game_date": "2026-06-06", "goals_for": 0, "goals_against": 2, "shots_for": 7, "shots_against": 16, "corners_for": 3, "corners_against": 8, "is_home": 1},
+    {"team": "Egypt", "opponent": "Morocco", "event_id": "e3", "game_date": "2026-06-11", "goals_for": 2, "goals_against": 2, "shots_for": 11, "shots_against": 14, "corners_for": 5, "corners_against": 6, "is_home": 0},
+    {"team": "Egypt", "opponent": "Nigeria", "event_id": "e4", "game_date": "2026-06-16", "goals_for": 1, "goals_against": 0, "shots_for": 10, "shots_against": 13, "corners_for": 6, "corners_against": 5, "is_home": 1}
+  ]
+}

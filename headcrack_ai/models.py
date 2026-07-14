@@ -10,10 +10,13 @@ from typing import Any
 
 class Sport(str, Enum):
     SOCCER = "soccer"
+    MMA = "mma"
     NBA = "nba"
     NFL = "nfl"
     MLB = "mlb"
     NHL = "nhl"
+    ESPORTS = "esports"
+    PRO_WRESTLING = "pro_wrestling"
 
 
 class MarketType(str, Enum):
@@ -37,6 +40,23 @@ class ResultStatus(str, Enum):
     WON = "won"
     LOST = "lost"
     VOID = "void"
+
+
+class VenueType(str, Enum):
+    """Where a quote comes from — sportsbooks and prediction markets are different venues."""
+
+    SPORTSBOOK = "sportsbook"
+    PREDICTION_MARKET = "prediction_market"
+    MANUAL = "manual"
+
+
+def venue_type_for_name(name: str) -> VenueType:
+    key = (name or "").lower().strip()
+    if key in {"kalshi", "polymarket"}:
+        return VenueType.PREDICTION_MARKET
+    if key in {"manual", "upload", "csv"}:
+        return VenueType.MANUAL
+    return VenueType.SPORTSBOOK
 
 
 @dataclass(frozen=True)
@@ -75,6 +95,22 @@ class Market:
     threshold: float | None = None
     starts_at: datetime | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    venue_type: VenueType = VenueType.SPORTSBOOK
+    canonical_event_id: str | None = None
+    canonical_outcome_id: str | None = None
+    quoted_at: datetime | None = None
+    bid: float | None = None  # probability or decimal price depending on venue
+    ask: float | None = None
+    liquidity: float | None = None
+    source_url: str | None = None
+
+    @property
+    def venue(self) -> str:
+        return self.sportsbook
+
+    @property
+    def is_prediction_market(self) -> bool:
+        return self.venue_type == VenueType.PREDICTION_MARKET
 
 
 @dataclass(frozen=True)
@@ -129,10 +165,20 @@ class Parlay:
     correlation_score: float
     risk_score: float
     notes: str = ""
+    venue: str | None = None  # single sportsbook for placeable slips
+    preset: str = "balanced"
+    combined_odds_estimated: bool = True
 
     @property
     def decimal_odds(self) -> float:
         return reduce(mul, (leg.decimal_odds for leg in self.legs), 1.0)
+
+    @property
+    def sportsbook(self) -> str:
+        if self.venue:
+            return self.venue
+        books = {leg.market.sportsbook for leg in self.legs}
+        return next(iter(books)) if len(books) == 1 else "mixed"
 
     @property
     def gross_payout(self) -> float:

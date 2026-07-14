@@ -1,40 +1,63 @@
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
+
+from .settings import get_settings
 
 DEFAULT_SQLITE_URL = "sqlite:///headcrack_ai.sqlite3"
 
 
+def _load_dotenv() -> None:
+    try:
+        from dotenv import load_dotenv
+
+        load_dotenv()
+    except ImportError:
+        pass
+
+
+_load_dotenv()
+
+
 def require_sqlite_url(database_url: str) -> str:
-    """Accept only SQLite-backed URLs until another store backend exists."""
+    """Legacy app store must remain SQLite for now."""
     if database_url.startswith("sqlite:///"):
         return database_url
-    # Allow bare local SQLite paths for developer convenience.
     if "://" not in database_url:
         return database_url
     raise ValueError(
-        "Headcrack AI currently supports SQLite persistence only. "
-        "Set HEADCRACK_DATABASE_URL to sqlite:///path/to/headcrack_ai.sqlite3 "
-        "or unset DATABASE_URL until a PostgresStore backend exists."
+        "Headcrack AI app persistence supports SQLite only. "
+        "Set HEADCRACK_DATABASE_URL to sqlite:///path/to/headcrack_ai.sqlite3. "
+        "Use HEADCRACK_WAREHOUSE_URL for Postgres warehouse."
     )
 
 
 @dataclass(frozen=True)
 class HeadcrackConfig:
     database_url: str = DEFAULT_SQLITE_URL
+    warehouse_url: str = "sqlite:///headcrack_warehouse.sqlite3"
     odds_api_key: str | None = None
     odds_api_base_url: str = "https://api.the-odds-api.com/v4"
     default_regions: str = "us"
     default_odds_format: str = "american"
+    kalshi_base_url: str = "https://api.elections.kalshi.com/trade-api/v2"
+    polymarket_gamma_url: str = "https://gamma-api.polymarket.com"
+    polymarket_clob_url: str = "https://clob.polymarket.com"
+    enable_prediction_markets: bool = False
 
     @classmethod
     def from_env(cls) -> "HeadcrackConfig":
-        raw_database_url = os.getenv("HEADCRACK_DATABASE_URL") or os.getenv("DATABASE_URL") or DEFAULT_SQLITE_URL
+        settings = get_settings()
+        raw_database_url = settings.resolved_database_url()
         return cls(
             database_url=require_sqlite_url(raw_database_url),
-            odds_api_key=os.getenv("ODDS_API_KEY"),
-            odds_api_base_url=os.getenv("ODDS_API_BASE_URL", "https://api.the-odds-api.com/v4"),
-            default_regions=os.getenv("ODDS_API_REGIONS", "us"),
-            default_odds_format=os.getenv("ODDS_API_FORMAT", "american"),
+            warehouse_url=settings.warehouse_url,
+            odds_api_key=settings.odds_api_key,
+            odds_api_base_url=settings.odds_api_base_url,
+            default_regions=settings.odds_api_regions,
+            default_odds_format=settings.odds_api_format,
+            kalshi_base_url=settings.kalshi_base_url,
+            polymarket_gamma_url=settings.polymarket_gamma_url,
+            polymarket_clob_url=settings.polymarket_clob_url,
+            enable_prediction_markets=settings.enable_prediction_markets,
         )

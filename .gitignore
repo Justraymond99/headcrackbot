@@ -43,12 +43,21 @@ wheels/
 data/
 *.csv
 *.json
+!examples/
+!examples/*.csv
+!examples/*.json
+!params.yaml
 
 # Logs
 logs/
 *.log
 
+# ML / warehouse artifacts
+models/registry/
+mlruns/
+reports/
+.headcrack_upload/
+
 # OS
 .DS_Store
 Thumbs.db
-

@@ -1,0 +1,63 @@
+{
+  "bets": [
+    {
+      "bet_id": "b-messi-shots",
+      "stake": 5.0,
+      "status": "pending",
+      "legs": [
+        {
+          "market_id": "messi-2-shots",
+          "sport": "soccer",
+          "event_id": "arg-egypt-r16",
+          "label": "Lionel Messi 2+ shots",
+          "market_type": "player_shots",
+          "sportsbook": "manual",
+          "odds": -180,
+          "team": "Argentina",
+          "player": "Lionel Messi",
+          "threshold": 1.5,
+          "model_probability": 0.73,
+          "model_name": "soccer_player_shots_poisson_v1",
+          "confidence": 0.68,
+          "tags": "argentina_control|attacking_volume"
+        }
+      ]
+    },
+    {
+      "bet_id": "b-arg-control-double",
+      "stake": 4.0,
+      "status": "pending",
+      "legs": [
+        {
+          "market_id": "arg-qualify",
+          "sport": "soccer",
+          "event_id": "arg-egypt-r16",
+          "label": "Argentina to qualify",
+          "market_type": "qualify",
+          "sportsbook": "manual",
+          "odds": -450,
+          "team": "Argentina",
+          "model_probability": 0.86,
+          "model_name": "poisson_ensemble",
+          "confidence": 0.72,
+          "tags": "argentina_control|favorite"
+        },
+        {
+          "market_id": "arg-corners-55",
+          "sport": "soccer",
+          "event_id": "arg-egypt-r16",
+          "label": "Argentina over 5.5 corners",
+          "market_type": "corners",
+          "sportsbook": "manual",
+          "odds": 110,
+          "team": "Argentina",
+          "threshold": 5.5,
+          "model_probability": 0.53,
+          "model_name": "manual_corner_model",
+          "confidence": 0.56,
+          "tags": "argentina_control|pressure"
+        }
+      ]
+    }
+  ]
+}

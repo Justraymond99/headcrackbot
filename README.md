@@ -8,13 +8,13 @@ The system is built around a simple idea: do not chase random parlays. Convert m
 
 ## What It Does
 
-- Ingests manual market files, Kalshi-style exported rows, and allowed official odds feeds
+- Ingests manual market files, sportsbook odds, and public Kalshi / Polymarket prices
 - Converts American and decimal odds into normalized American prices
 - Stores markets, predictions, odds snapshots, bet legs, and bet records in SQLite
 - Calculates implied probability, model edge, expected value, and EV per dollar
-- Runs soccer-focused Poisson and Monte Carlo simulations
-- Builds parlay cards by target payout band
-- Scores parlays by correlation, risk, adjusted hit probability, and expected value
+- Runs soccer-focused Poisson and joint Monte Carlo simulations for matches and parlays
+- Builds **single-sportsbook** parlay cards by leg-count band and preset (never mixes books)
+- Scores parlays by diversity, risk, adjusted hit probability, and expected value
 - Tracks bankroll, bet records, results, ROI, and market performance
 - Provides a CLI and Streamlit dashboard for daily workflow
 
@@ -27,29 +27,54 @@ The project now has a production-shaped Headcrack AI foundation:
 - EV parlay optimizer
 - SQLite persistence layer
 - Official The Odds API adapter
-- Manual Kalshi adapter
-- Dashboard with persistence-backed value board
+- Live public Kalshi + Polymarket adapters (read-only prices, comparison, paper simulation)
+- Manual Kalshi CSV fallback
+- Dashboard with high-contrast theme, source freshness pills, and game → slip → simulate flow
+- Venue-valid single-sportsbook parlays with Balanced / Cross-game / Same-game / Player-props presets
+- Odds-informed match and full-slip Monte Carlo (correlated same-game grading)
 - CLI commands for ingestion, odds fetching, card generation, and value-board review
-- Regression tests for probability, provider adapters, persistence, config safety, and dashboard imports
+- Real bet-result import workflow with automatic parlay settlement
+- Tracking reports (ROI by market/sport/sportsbook, hit rate by confidence, best/worst models)
+- Model calibration reports (reliability bins, Brier score, log loss, expected calibration error)
+- Historical feature store for player and team game logs
+- Soccer player shot model driven by the feature store
+- Event-level soccer player-prop ingestion (shots, shots on target, goals, assists)
+- World Cup player-prop fetch in the dashboard, with an honest no-coverage state
+- Odds Screen, +EV Finder, Prop Optimizer, Whale Watch, Arbitrage, and MonsterGPT tools
+- Automated daily report generation
+- Natural-language card explanations with an optional LLM narrator and offline template fallback
+- Regression tests for probability, provider adapters, persistence, config safety, dashboard imports, tracking, calibration, feature store, shot model, and reporting
 
 ## Architecture
 
 ```text
 headcrack_ai/
 ├── bankroll.py          # staking, fractional Kelly, ROI summaries
+├── calibration.py       # reliability bins, Brier score, log loss, ECE
 ├── cli.py               # command-line workflow
 ├── config.py            # environment-backed config with SQLite guardrails
-├── dashboard.py         # Streamlit dashboard
-├── explain.py           # human-readable card and leg explanations
+├── daily_report.py      # end-to-end daily report generator
+├── dashboard.py         # Streamlit dashboard routing
+├── dashboard_pages.py   # research, props, EV, odds, and arbitrage pages
+├── explain/             # grounded card briefs and pick attribution
+├── feature_store.py     # historical player/team game logs and rolling features
 ├── ingest.py            # manual JSON/CSV market ingestion
+├── llm_explain.py       # LLM/template natural-language card narration
 ├── models.py            # domain models: markets, predictions, legs, parlays, records
 ├── optimizer.py         # EV/correlation/risk parlay builder
 ├── persistence.py       # SQLite schema and store
 ├── probability.py       # odds conversion, Poisson, Monte Carlo, ensemble utilities
+├── reports.py           # tracking reports over settled bets
+├── results.py           # bet + market-result import and auto-settlement
+├── shot_model.py        # soccer player shot Poisson model
 ├── services.py          # app/service coordination layer
+├── tools/               # odds, EV, props, projections, whale watch, arbitrage
 └── providers/
-    ├── kalshi_manual.py # manual/exported Kalshi-style market rows
-    └── odds_api.py      # The Odds API adapter and normalizer
+    ├── kalshi.py         # public Kalshi market-data adapter
+    ├── kalshi_manual.py  # manual/exported Kalshi-style market rows
+    ├── matcher.py        # sportsbook ↔ prediction-market identity matching
+    ├── odds_api.py       # The Odds API adapter and normalizer
+    └── polymarket.py     # public Polymarket Gamma/CLOB adapter
 ```
 
 ## Install
@@ -57,7 +82,7 @@ headcrack_ai/
 ```bash
 git clone https://github.com/Justraymond99/headcrackbot.git
 cd headcrackbot
-pip install -r requirements.txt
+pip install -r requirements-headcrack.txt
 ```
 
 If the repo does not yet include all optional dashboard/test dependencies, install them directly:
@@ -78,6 +103,57 @@ export ODDS_API_FORMAT="american"
 ```
 
 Important: non-SQLite `DATABASE_URL` values are rejected until a Postgres backend exists. Use `HEADCRACK_DATABASE_URL` for the app database.
+
+## Venues: sportsbooks vs prediction markets
+
+Headcrack treats **sportsbooks** (FanDuel, BetMGM, DraftKings, …) and **prediction markets** (Kalshi, Polymarket) as different venues.
+
+| Capability | Sportsbooks | Kalshi / Polymarket |
+|---|---|---|
+| Live public prices | The Odds API | Public REST (no trading keys) |
+| Placeable parlays | Single-book slips only | Not mixed into sportsbook parlays |
+| Comparison / arb gaps | Cross-book arbs | Vs sportsbooks when matcher links contracts |
+| Simulation | Odds-informed match + slip sims | Shown beside sims as optional comparison |
+| Real order execution | Not implemented | Not implemented |
+
+`ENABLE_PREDICTION_MARKETS=true` (default) loads public Kalshi and Polymarket soccer-related contracts on **Refresh all**. Unmatched contracts stay visible but are never labeled as arbitrage. CSV upload remains an offline Kalshi fallback.
+
+Paper simulation grades slips against Monte Carlo worlds; it is not filled-order execution.
+
+## World Cup Player Props
+
+Open the dashboard and select **World Cup props** in the global fetch bar. Player
+props use The Odds API's event-level endpoint; they cannot be requested from the
+regular league odds endpoint.
+
+The same workflow is available from the CLI:
+
+```bash
+python -m headcrack_ai.cli fetch-world-cup-props --friendly
+```
+
+The provider currently documents soccer prop coverage mainly for major domestic
+leagues and US bookmakers, so World Cup availability can be empty. Headcrack
+shows that state explicitly and never substitutes synthetic odds. Manual JSON/CSV
+prop files remain supported through **Build Card**.
+
+Only props backed by a Headcrack model are eligible for the optimized slip.
+Book-only lines still appear in the available-props screen, but are not labeled
+as +EV.
+
+## Expansion Order
+
+The domain model reserves sport identifiers for the planned expansion:
+
+1. Soccer (active; World Cup props first)
+2. MMA/UFC
+3. Baseball
+4. Basketball
+5. Esports
+6. Pro wrestling/WWE
+
+Each sport will receive its own market mapping and projection model before its
+lines are allowed into +EV or optimizer results.
 
 ## Quick Start
 
@@ -122,6 +198,71 @@ Launch the dashboard:
 ```bash
 streamlit run headcrack_ai/dashboard.py
 ```
+
+## Tracking, Models, and Reports
+
+Import bets you placed, then import the real-world market outcomes. Bets settle
+automatically once every leg has a recorded result:
+
+```bash
+python -m headcrack_ai.cli import-bets --input examples/bets_sample.json
+python -m headcrack_ai.cli import-results --input examples/results_sample.json
+```
+
+Review performance and model trustworthiness:
+
+```bash
+python -m headcrack_ai.cli report
+python -m headcrack_ai.cli calibration-report
+```
+
+Load historical game logs and project a player shot line from them:
+
+```bash
+python -m headcrack_ai.cli load-player-logs --input examples/player_logs_sample.json
+python -m headcrack_ai.cli load-team-logs --input examples/team_logs_sample.json
+python -m headcrack_ai.cli project-shots --player "Lionel Messi" --threshold 1.5 --opponent Egypt
+```
+
+Generate the full daily report (card, narrative, tracking, calibration, no-bet warnings):
+
+```bash
+python -m headcrack_ai.cli daily-report --input examples/markets_argentina_egypt.json
+```
+
+Get a natural-language explanation of a card. If `OPENAI_API_KEY` is set the LLM
+narrator is used, otherwise a deterministic offline template narrates the card:
+
+```bash
+python -m headcrack_ai.cli explain-narrative --input examples/markets_argentina_egypt.json
+```
+
+### Bet and Result Input Formats
+
+A bet file reuses the market row schema for each leg, wrapped with staking metadata:
+
+```json
+{
+  "bets": [
+    {
+      "bet_id": "b-messi-shots",
+      "stake": 5.0,
+      "legs": [
+        {"market_id": "messi-2-shots", "label": "Lionel Messi 2+ shots", "market_type": "player_shots", "odds": -180, "model_probability": 0.73, "confidence": 0.68}
+      ]
+    }
+  ]
+}
+```
+
+A results file records each market's outcome (`won`, `lost`, or `void`):
+
+```json
+{"results": [{"market_id": "messi-2-shots", "outcome": "won"}]}
+```
+
+A void leg is treated as a push: it is dropped from the parlay and the payout is
+recomputed from the surviving winning legs.
 
 ## Market Input Format
 
@@ -217,6 +358,9 @@ SQLite tables include:
 - `bet_legs`
 - `bet_records`
 - `odds_snapshots`
+- `market_results` (real-world outcomes used for settlement and calibration)
+- `player_game_logs` (historical feature store)
+- `team_game_logs` (historical feature store)
 
 The stored value board only shows the latest prediction per market, so repeated imports do not flood the board with stale duplicate edges.
 
@@ -233,7 +377,7 @@ Kalshi is manual/export-first for now. Use CSV rows containing tickers, labels, 
 ## Testing
 
 ```bash
-pytest tests/test_headcrack_ai_core.py
+pytest tests/
 ```
 
 Current test coverage includes:
@@ -249,20 +393,35 @@ Current test coverage includes:
 - The Odds API normalizer
 - decimal odds conversion
 - dashboard importability
+- bet + market-result import and auto-settlement (including void pushes)
+- tracking reports (ROI, hit rate by confidence, model performance)
+- calibration metrics (Brier, reliability bins, ECE)
+- feature store rolling features
+- soccer player shot model projection
+- template card narration and daily report generation
 
 ## Roadmap
 
-Next build targets:
+**Locked 9-sprint plan:** [docs/HEADCRACK_AI_SPRINT_PLAN.md](docs/HEADCRACK_AI_SPRINT_PLAN.md)
 
-- Historical feature store
-- Soccer player shot model
-- Shot-on-target model
-- Cards/corners models
-- Model calibration reports
-- Real bet-result import workflow
-- Postgres store backend
-- Automated daily report generation
-- LLM-generated card explanations
+| Sprint | Goal |
+| ------ | ---- |
+| 1 | Production hardening (CI, Docker, logging, Alembic, retries) |
+| 2 | Historical warehouse & normalized database |
+| 3 | Feature engineering pipeline |
+| 4 | Classical ML models |
+| 5 | Ensemble + calibration |
+| 6 | Backtesting engine |
+| 7 | MLOps (DVC / MLflow) |
+| 8 | Daily automation, reporting, APIs |
+| 9 | AI explanation layer |
+
+### Already shipped (pre-Sprint 1 baseline)
+
+- Soccer Poisson engine + live odds enrichment
+- EV parlay optimizer + plain-English dashboard
+- Bet tracking, calibration reports, daily report
+- Historical feature store + player shot model (prototype)
 
 ## Responsible Use
 
