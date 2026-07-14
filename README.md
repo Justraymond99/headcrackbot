@@ -199,6 +199,17 @@ Launch the dashboard:
 streamlit run headcrack_ai/dashboard.py
 ```
 
+Run the interactive Telegram bot:
+
+```bash
+python -m headcrack_ai.cli serve-telegram
+```
+
+Configure `TELEGRAM_BOT_TOKEN` and `TELEGRAM_ALLOWED_CHAT_IDS` in `.env` first.
+The allowlist is required: unknown chats are ignored. Available commands include
+`/games`, `/picks`, `/props`, `/markets`, `/parlays`, `/simulate`, and
+`/simparlay`. The bot reads and simulates markets but does not place wagers.
+
 ## Tracking, Models, and Reports
 
 Import bets you placed, then import the real-world market outcomes. Bets settle
