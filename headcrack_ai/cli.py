@@ -289,6 +289,12 @@ def serve_api_command(args: argparse.Namespace) -> None:
     api_main()
 
 
+def serve_telegram_command(args: argparse.Namespace) -> None:
+    from headcrack_ai.telegram_bot import main as telegram_main
+
+    telegram_main()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser("headcrack-ai")
     sub = parser.add_subparsers(required=True)
@@ -453,6 +459,9 @@ def main() -> None:
 
     api = sub.add_parser("serve-api", help="Start FastAPI server")
     api.set_defaults(func=serve_api_command)
+
+    telegram = sub.add_parser("serve-telegram", help="Start the interactive Telegram bot")
+    telegram.set_defaults(func=serve_telegram_command)
 
     args = parser.parse_args()
     args.func(args)
