@@ -424,12 +424,53 @@ def _ticker(live_legs: list) -> None:
     )
 
 
+def _prediction_markets_panel(prediction_legs: list, match_results: list | None = None) -> None:
+    if not prediction_legs:
+        html_panel(
+            "Prediction Markets",
+            "<p class='cell-muted'>Kalshi & Polymarket load via <b>Refresh all</b>. "
+            "Enable <code>ENABLE_PREDICTION_MARKETS=true</code> in <code>.env</code>.</p>",
+            link="Open markets",
+        )
+        return
+
+    kalshi = sum(1 for leg in prediction_legs if leg.market.sportsbook.lower() == "kalshi")
+    poly = sum(1 for leg in prediction_legs if leg.market.sportsbook.lower() == "polymarket")
+    matched = sum(1 for m in (match_results or []) if getattr(m, "matched", False))
+    body = (
+        f"<p style='color:{MUTED};margin:0 0 .8rem 0'>"
+        f"<b style='color:{TEXT}'>{kalshi}</b> Kalshi · "
+        f"<b style='color:{TEXT}'>{poly}</b> Polymarket · "
+        f"<b style='color:{TEXT}'>{matched}</b> linked to sportsbooks</p>"
+    )
+    for leg in sorted(
+        prediction_legs,
+        key=lambda row: (row.market.liquidity or 0.0, row.implied_probability),
+        reverse=True,
+    )[:6]:
+        venue = leg.market.sportsbook.title()
+        label = leg.market.label
+        for prefix in ("Polymarket — ", "Kalshi YES — "):
+            if label.startswith(prefix):
+                label = label.removeprefix(prefix)
+        if len(label) > 72:
+            label = label[:69] + "..."
+        liq = f" · liq ${leg.market.liquidity:,.0f}" if leg.market.liquidity else ""
+        body += (
+            f"<div class='hc-leg'><div class='n'>{label}<small>{venue}{liq}</small></div>"
+            f"<div class='o' style='color:{GREEN_SOFT}'>{leg.implied_probability:.1%}</div></div>"
+        )
+    html_panel("Prediction Markets", body, link="View all")
+
+
 def render_dashboard_home(
     live_legs: list,
     store: SQLiteStore,
     budget: float,
     user_name: str = "there",
     sources: list | None = None,
+    prediction_legs: list | None = None,
+    match_results: list | None = None,
 ) -> None:
     _header(user_name)
     if sources:
@@ -451,6 +492,11 @@ def render_dashboard_home(
         _opportunities(live_legs, store)
     with right:
         _parlay_builder(live_legs, store, budget)
+    st.write("")
+    _prediction_markets_panel(prediction_legs or [], match_results)
+    if prediction_legs and st.button("Open full prediction markets view →", key="open_prediction_markets"):
+        st.session_state["page"] = "prediction_markets"
+        st.rerun()
     a, b, c = st.columns(3)
     with a:
         _confidence(live_legs)

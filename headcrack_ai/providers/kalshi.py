@@ -18,6 +18,42 @@ logger = get_logger(__name__)
 
 DEFAULT_KALSHI_BASE = "https://api.elections.kalshi.com/trade-api/v2"
 
+# Kalshi multigame titles often omit "soccer"/"world cup" — match soccer-ish content instead.
+SOCCER_SIGNAL_TERMS: tuple[str, ...] = (
+    "world cup",
+    "soccer",
+    "football",
+    "fifa",
+    "advances",
+    "goal",
+    "corner",
+    "reg time",
+    "1h goal",
+    "france",
+    "spain",
+    "england",
+    "argentina",
+    "brazil",
+    "germany",
+    "portugal",
+    "mbappe",
+    "messi",
+    "yamal",
+    "kane",
+    "alvarez",
+    "olise",
+    "tchouameni",
+    "oyarzabal",
+)
+
+SOCCER_EVENT_HINTS: tuple[str, ...] = (
+    "sport",
+    "soccer",
+    "fifa",
+    "worldcup",
+    "wc26",
+)
+
 
 class KalshiClient:
     def __init__(self, base_url: str = DEFAULT_KALSHI_BASE) -> None:
@@ -50,18 +86,30 @@ class KalshiClient:
         return self._get_json("markets", params)
 
     def search_soccer_markets(self, query_terms: list[str] | None = None, limit: int = 100) -> list[dict[str, Any]]:
-        """Pull open markets and filter to soccer / World Cup-ish titles."""
-        terms = [t.lower() for t in (query_terms or ["world cup", "soccer", "football", "fifa"])]
+        """Pull open markets and filter to soccer / World Cup-ish contracts."""
+        terms = [t.lower() for t in (query_terms or list(SOCCER_SIGNAL_TERMS))]
         markets: list[dict[str, Any]] = []
         cursor = None
         pages = 0
-        while pages < 5 and len(markets) < limit:
+        while pages < 15 and len(markets) < limit:
             payload = self.list_markets(status="open", limit=200, cursor=cursor)
             for market in payload.get("markets", []):
+                if _yes_price_cents(market) is None:
+                    continue
                 title = (market.get("title") or market.get("subtitle") or "").lower()
                 event = (market.get("event_ticker") or "").lower()
                 blob = f"{title} {event}"
                 if any(term in blob for term in terms):
+                    if not _looks_like_soccer_contract(blob):
+                        continue
+                    markets.append(market)
+                    if len(markets) >= limit:
+                        break
+                    continue
+                if any(hint in event for hint in SOCCER_EVENT_HINTS) and any(
+                    token in blob
+                    for token in ("advances", "goal", "corner", "france", "spain", "england", "argentina")
+                ):
                     markets.append(market)
                     if len(markets) >= limit:
                         break
@@ -72,20 +120,74 @@ class KalshiClient:
         return markets
 
 
+def _looks_like_soccer_contract(blob: str) -> bool:
+    soccer_markers = (
+        "advances",
+        "goal",
+        "corner",
+        "reg time",
+        "both teams to score",
+        "france",
+        "spain",
+        "england",
+        "argentina",
+        "brazil",
+        "germany",
+        "portugal",
+        "mbappe",
+        "messi",
+        "yamal",
+        "kane",
+    )
+    return any(marker in blob for marker in soccer_markers)
+
+
+def _parse_dollar_price(raw: Any) -> float | None:
+    if raw is None:
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None
+    if value <= 0:
+        return None
+    # API returns 0-1 probabilities as dollar strings.
+    if value <= 1:
+        return value * 100.0
+    if value < 100:
+        return value
+    return None
+
+
+def _dollar_probability(raw: Any) -> float | None:
+    if raw is None:
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None
+    if value <= 0:
+        return None
+    if value <= 1:
+        return value
+    if value < 100:
+        return value / 100.0
+    return None
+
+
 def _yes_price_cents(row: dict[str, Any]) -> float | None:
-    for key in ("yes_ask", "yes_bid", "last_price", "yes_price"):
-        raw = row.get(key)
-        if raw is None:
-            continue
-        try:
-            value = float(raw)
-        except (TypeError, ValueError):
-            continue
-        # Kalshi often reports prices in cents (1-99) or sometimes as 0-1.
-        if 0 < value <= 1:
-            return value * 100.0
-        if 0 < value < 100:
-            return value
+    for key in (
+        "yes_ask_dollars",
+        "yes_bid_dollars",
+        "last_price_dollars",
+        "yes_ask",
+        "yes_bid",
+        "last_price",
+        "yes_price",
+    ):
+        cents = _parse_dollar_price(row.get(key))
+        if cents is not None:
+            return cents
     return None
 
 
@@ -146,9 +248,17 @@ def normalize_kalshi_markets(
         if vs_match:
             home = vs_match.group(1).strip()
             away = vs_match.group(2).strip().split("?")[0].strip()
-        yes_bid = row.get("yes_bid")
-        yes_ask = row.get("yes_ask")
-        volume = row.get("volume") or row.get("volume_24h") or row.get("open_interest")
+        yes_bid = row.get("yes_bid_dollars", row.get("yes_bid"))
+        yes_ask = row.get("yes_ask_dollars", row.get("yes_ask"))
+        volume = (
+            row.get("volume_fp")
+            or row.get("volume_24h_fp")
+            or row.get("volume")
+            or row.get("volume_24h")
+            or row.get("open_interest_fp")
+            or row.get("open_interest")
+        )
+        liquidity = row.get("liquidity_dollars") or row.get("liquidity")
         market = Market(
             market_id=f"kalshi:{ticker}:yes",
             sport=sport,
@@ -180,13 +290,11 @@ def normalize_kalshi_markets(
                 market_type, team=team or home, outcome="yes"
             ),
             quoted_at=now,
-            bid=float(yes_bid) / 100.0 if isinstance(yes_bid, (int, float)) and yes_bid > 1 else (
-                float(yes_bid) if isinstance(yes_bid, (int, float)) else None
+            bid=_dollar_probability(yes_bid),
+            ask=_dollar_probability(yes_ask),
+            liquidity=_dollar_probability(liquidity) or (
+                float(liquidity) if isinstance(liquidity, (int, float)) else None
             ),
-            ask=float(yes_ask) / 100.0 if isinstance(yes_ask, (int, float)) and yes_ask > 1 else (
-                float(yes_ask) if isinstance(yes_ask, (int, float)) else None
-            ),
-            liquidity=float(volume) if isinstance(volume, (int, float)) else None,
             source_url=f"https://kalshi.com/markets/{normalize_name(event_ticker)}",
         )
         markets.append(attach_canonical_ids(market))
