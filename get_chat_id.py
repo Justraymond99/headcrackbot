@@ -1,12 +1,19 @@
 """Get your Telegram Chat ID after messaging the bot."""
-import requests
+import os
 
-BOT_TOKEN = "8506045290:AAGm8d-kYJoBOtgwsNJalE_kZicAgDPFZXs"
+import requests
+from dotenv import load_dotenv
+
+
+load_dotenv()
 
 def get_chat_id():
     """Get Chat ID from recent messages."""
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates"
-    
+    bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    if not bot_token:
+        raise SystemExit("Set TELEGRAM_BOT_TOKEN in .env first.")
+    url = f"https://api.telegram.org/bot{bot_token}/getUpdates"
+
     try:
         response = requests.get(url, timeout=10)
         data = response.json()
@@ -51,8 +58,7 @@ def get_chat_id():
             print("=" * 50)
             print(f"✅ Your Chat ID: {latest_chat_id}")
             print("\n📝 Add this to your .env file:")
-            print(f"TELEGRAM_BOT_TOKEN=8506045290:AAGm8d-kYJoBOtgwsNJalE_kZicAgDPFZXs")
-            print(f"TELEGRAM_CHAT_ID={latest_chat_id}")
+            print(f"TELEGRAM_ALLOWED_CHAT_IDS={latest_chat_id}")
             print("=" * 50)
             return latest_chat_id
         

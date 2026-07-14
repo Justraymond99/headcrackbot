@@ -8,7 +8,7 @@ from pathlib import Path
 from ..daily_report import format_daily_report, generate_daily_report
 from ..ingest import load_markets_json
 from ..logging_config import get_logger, new_correlation_id, setup_logging
-from ..llm_explain import TemplateNarrator
+from ..llm_explain import get_default_narrator
 from ..services import HeadcrackAIService
 from ..soccer import SOCCER_LEAGUES
 
@@ -43,7 +43,7 @@ def run_daily_soccer(
         return DailyJobResult(job_id, active, 0, None, False, "No soccer lines available")
 
     store = service.store
-    report = generate_daily_report(legs, store, budget=budget, narrator=TemplateNarrator())
+    report = generate_daily_report(legs, store, budget=budget, narrator=get_default_narrator())
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d")

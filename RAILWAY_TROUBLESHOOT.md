@@ -16,8 +16,8 @@ In Railway → **Variables** tab, make sure these are set:
 
 **Required:**
 ```
-TELEGRAM_BOT_TOKEN=8506045290:AAGm8d-kYJoBOtgwsNJalE_kZicAgDPFZXs
-TELEGRAM_CHAT_ID=7197338861
+TELEGRAM_BOT_TOKEN=your_new_botfather_token
+TELEGRAM_ALLOWED_CHAT_IDS=your_numeric_chat_id
 ODDS_API_KEY=your_key_here
 SPORTSDATA_API_KEY=your_key_here
 ```

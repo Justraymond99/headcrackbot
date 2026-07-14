@@ -36,8 +36,8 @@ Deploy to a cloud service so it runs 24/7 without your computer.
 3. **Add Environment Variables**:
    In Railway dashboard → **Variables** tab, add:
    ```
-   TELEGRAM_BOT_TOKEN=8506045290:AAGm8d-kYJoBOtgwsNJalE_kZicAgDPFZXs
-   TELEGRAM_CHAT_ID=7197338861
+   TELEGRAM_BOT_TOKEN=your_new_botfather_token
+   TELEGRAM_ALLOWED_CHAT_IDS=your_numeric_chat_id
    ODDS_API_KEY=your_odds_api_key
    SPORTSDATA_API_KEY=your_sportsdata_key
    PICKS_SPORTS=NBA,NFL,MLB,NHL,UFC,BOXING

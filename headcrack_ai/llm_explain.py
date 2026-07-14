@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import json
-import os
 import urllib.request
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
+
+from .settings import get_settings
 
 from .models import BetLeg, Parlay
 from .plain_language import (
@@ -127,13 +128,13 @@ class OpenAINarrator:
 
     @classmethod
     def from_env(cls) -> "OpenAINarrator | None":
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
+        settings = get_settings()
+        if not settings.openai_api_key:
             return None
         return cls(
-            api_key=api_key,
-            model=os.getenv("HEADCRACK_LLM_MODEL", "gpt-4o-mini"),
-            base_url=os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+            api_key=settings.openai_api_key,
+            model=settings.headcrack_llm_model,
+            base_url=settings.openai_base_url,
         )
 
     def narrate(self, summary: dict[str, Any]) -> str:

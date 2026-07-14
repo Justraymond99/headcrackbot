@@ -19,7 +19,7 @@ from headcrack_ai.dashboard_ui import (
 )
 from headcrack_ai.explain import build_card_brief, explain_pick_rationale, format_card_brief
 from headcrack_ai.ingest import load_markets_csv, load_markets_json
-from headcrack_ai.llm_explain import explain_brief_narrative
+from headcrack_ai.llm_explain import OpenAINarrator, explain_brief_narrative
 from headcrack_ai.persistence import SQLiteStore
 from headcrack_ai.plain_language import (
     leg_to_friendly_row,
@@ -147,6 +147,8 @@ def render_home(live_legs: list, store: SQLiteStore, has_key: bool) -> None:
 
 def render_monster_gpt(live_legs: list, budget: float, min_edge: float) -> None:
     hero("MonsterGPT", "Ask the AI betting assistant — grounded in live model output, not vibes.")
+    llm_on = OpenAINarrator.from_env() is not None
+    st.caption("LLM enabled (gpt-4o-mini)" if llm_on else "Template mode — set OPENAI_API_KEY for LLM answers")
     if "chat_messages" not in st.session_state:
         st.session_state.chat_messages = [
             {

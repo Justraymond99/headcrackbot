@@ -18,7 +18,7 @@ def test_telegram():
     if not bot_token:
         print("❌ TELEGRAM_BOT_TOKEN not found in .env file")
         print("\nPlease add to .env:")
-        print("TELEGRAM_BOT_TOKEN=8506045290:AAm8d-kYJoB0tgwsNJalE_kZicAgDPFZXs")
+        print("TELEGRAM_BOT_TOKEN=your_new_botfather_token")
         return
     
     print(f"✅ Bot Token found: {bot_token[:10]}...")

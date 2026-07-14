@@ -38,6 +38,8 @@ class Settings(BaseSettings):
     http_retry_backoff: float = Field(default=1.5, alias="HTTP_RETRY_BACKOFF")
 
     openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")
+    openai_base_url: str = Field(default="https://api.openai.com/v1", alias="OPENAI_BASE_URL")
+    headcrack_llm_model: str = Field(default="gpt-4o-mini", alias="HEADCRACK_LLM_MODEL")
 
     telegram_bot_token: str | None = Field(default=None, alias="TELEGRAM_BOT_TOKEN")
     telegram_chat_id: str | None = Field(default=None, alias="TELEGRAM_CHAT_ID")

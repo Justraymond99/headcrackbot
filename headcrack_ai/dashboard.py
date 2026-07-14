@@ -11,6 +11,7 @@ import pandas as pd
 
 from headcrack_ai.calibration import build_calibration_report, format_calibration_report
 from headcrack_ai.config import HeadcrackConfig
+from headcrack_ai.settings import get_settings
 from headcrack_ai.dashboard_home import render_dashboard_home
 from headcrack_ai.dashboard_pages import (
     render_ai_picks,
@@ -202,10 +203,11 @@ def _preferences() -> None:
 
 def _api_keys() -> None:
     hero("API Keys", "Connected data providers.")
-    status = "Connected" if _has_key() else "Not set"
+    odds_status = "Connected" if _has_key() else "Not set"
+    openai_status = "Connected" if get_settings().openai_api_key else "Not set"
     st.markdown(
-        f"- **The Odds API**: `{status}` — set `ODDS_API_KEY` in `.env`\n"
-        "- **OpenAI (MonsterGPT)**: set `OPENAI_API_KEY` to enable LLM answers (optional)"
+        f"- **The Odds API**: `{odds_status}` — set `ODDS_API_KEY` in `.env`\n"
+        f"- **OpenAI (MonsterGPT)**: `{openai_status}` — set `OPENAI_API_KEY` in `.env`"
     )
 
 
