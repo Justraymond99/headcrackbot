@@ -20,8 +20,9 @@ from headcrack_ai.dashboard_pages import (
     render_dfs_optimizer,
     render_ev_finder,
     render_fetch_bar,
-    render_monster_gpt,
+    render_crackbot,
     render_odds_screen,
+    render_prediction_markets,
     render_projections,
     render_simulator,
     render_whale_watch,
@@ -65,10 +66,11 @@ NAV = [
     (
         "Edge Tools",
         [
-            ("monstergpt", "MonsterGPT", "✦"),
+            ("crackbot", "CrackBot", "✦"),
             ("odds_screen", "Odds Screen", "▥"),
             ("ev_finder", "+EV Finder", "▲"),
             ("prop_optimizer", "Prop Optimizer", "◆"),
+            ("prediction_markets", "Prediction Markets", "◈"),
             ("arbitrage", "Arbitrage", "⇄"),
         ],
     ),
@@ -207,7 +209,7 @@ def _api_keys() -> None:
     openai_status = "Connected" if get_settings().openai_api_key else "Not set"
     st.markdown(
         f"- **The Odds API**: `{odds_status}` — set `ODDS_API_KEY` in `.env`\n"
-        f"- **OpenAI (MonsterGPT)**: `{openai_status}` — set `OPENAI_API_KEY` in `.env`"
+        f"- **OpenAI (CrackBot)**: `{openai_status}` — set `OPENAI_API_KEY` in `.env`"
     )
 
 
@@ -216,7 +218,7 @@ def _help() -> None:
     st.markdown(
         "1. Open **Data & odds** in the sidebar and load a picks file, or use the fetch bar.\n"
         "2. The **Dashboard** shows EV, top value, parlays, and model performance.\n"
-        "3. **Edge Tools** cover odds screen, +EV, props, arbitrage, and MonsterGPT.\n\n"
+        "3. **Edge Tools** cover odds screen, +EV, props, arbitrage, and CrackBot.\n\n"
         "World Cup player props: use **Upload Lines** or the CLI "
         "`python -m headcrack_ai.cli fetch-world-cup-props`."
     )
@@ -245,7 +247,7 @@ def run_dashboard() -> None:
         kalshi_path.write_bytes(kalshi_upload.read())
 
     # Seamless start: pull sportsbooks + prediction markets once per data version.
-    board_version = 3
+    board_version = 4
     if st.session_state.get("auto_fetch_version") != board_version:
         st.session_state["auto_fetch_version"] = board_version
         try:
@@ -254,6 +256,7 @@ def run_dashboard() -> None:
             if pack:
                 st.session_state["live_legs"] = pack["sportsbook_legs"] + pack["prediction_legs"]
                 st.session_state["prediction_legs"] = pack["prediction_legs"]
+                st.session_state["match_results"] = pack["match_results"]
                 st.session_state["live_leagues"] = pack["leagues"]
                 st.session_state["source_status"] = [
                     {"name": s.name, "status": s.status, "detail": s.detail} for s in pack["sources"]
@@ -264,6 +267,7 @@ def run_dashboard() -> None:
 
     live_legs = st.session_state.get("live_legs", [])
     prediction_legs = st.session_state.get("prediction_legs", [])
+    match_results = st.session_state.get("match_results", [])
     min_edge = 0.0
     user_name = st.session_state.get("user_name", "there")
 
@@ -279,6 +283,8 @@ def run_dashboard() -> None:
             budget,
             user_name=user_name,
             sources=st.session_state.get("source_status"),
+            prediction_legs=prediction_legs,
+            match_results=match_results,
         )
     elif page == "value_board":
         _value_board(store)
@@ -300,14 +306,16 @@ def run_dashboard() -> None:
         _bet_tracker(store)
     elif page == "reports":
         _reports(store)
-    elif page == "monstergpt":
-        render_monster_gpt(live_legs, budget, min_edge)
+    elif page in {"crackbot", "monstergpt"}:
+        render_crackbot(live_legs, budget, min_edge)
     elif page == "odds_screen":
         render_odds_screen(live_legs)
     elif page == "ev_finder":
         render_ev_finder(live_legs, min_edge)
     elif page == "prop_optimizer":
         render_dfs_optimizer(live_legs, min_edge)
+    elif page == "prediction_markets":
+        render_prediction_markets(prediction_legs, live_legs, match_results)
     elif page == "arbitrage":
         render_arbitrage(live_legs, kalshi_path)
     elif page == "preferences":

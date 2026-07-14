@@ -61,7 +61,7 @@ PRESETS: dict[str, dict] = {
 }
 
 MAX_POOL = 14
-MAX_COMBOS_PER_BOOK = 8_000
+MAX_COMBOS_PER_BOOK = 5_000
 
 
 def _selection_key(leg: BetLeg) -> tuple:

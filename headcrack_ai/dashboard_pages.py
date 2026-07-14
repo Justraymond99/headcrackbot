@@ -74,6 +74,7 @@ def render_fetch_bar(service: HeadcrackAIService, league_options: dict[str, str]
             pack = service.refresh_all_sources()
         st.session_state["live_legs"] = pack["sportsbook_legs"] + pack["prediction_legs"]
         st.session_state["prediction_legs"] = pack["prediction_legs"]
+        st.session_state["match_results"] = pack["match_results"]
         st.session_state["live_leagues"] = pack["leagues"]
         st.session_state["source_status"] = [
             {"name": s.name, "status": s.status, "detail": s.detail} for s in pack["sources"]
@@ -128,11 +129,12 @@ def render_home(live_legs: list, store: SQLiteStore, has_key: bool) -> None:
     )
     section("Tool suite")
     tiles = [
-        ("MonsterGPT", "AI research & bet breakdowns"),
+        ("CrackBot", "AI research & bet breakdowns"),
         ("AI Picks", "Model-backed picks & projections"),
         ("Odds Screen", "Line shop across books"),
         ("+EV Finder", "Positive expected value plays"),
         ("Prop Optimizer", "DFS & player-prop stacks"),
+        ("Prediction Markets", "Kalshi & Polymarket contracts"),
         ("Whale Watch", "Big line moves & steam"),
         ("Arbitrage", "Cross-book & prediction gaps"),
     ]
@@ -145,8 +147,8 @@ def render_home(live_legs: list, store: SQLiteStore, has_key: bool) -> None:
             )
 
 
-def render_monster_gpt(live_legs: list, budget: float, min_edge: float) -> None:
-    hero("MonsterGPT", "Ask the AI betting assistant — grounded in live model output, not vibes.")
+def render_crackbot(live_legs: list, budget: float, min_edge: float) -> None:
+    hero("CrackBot", "Your Headcrack betting copilot — grounded in live model output, not vibes.")
     llm_on = OpenAINarrator.from_env() is not None
     st.caption("LLM enabled (gpt-4o-mini)" if llm_on else "Template mode — set OPENAI_API_KEY for LLM answers")
     if "chat_messages" not in st.session_state:
@@ -343,6 +345,102 @@ def render_whale_watch(store: SQLiteStore, live_legs: list) -> None:
         ]
     )
     dataframe_compact(pd.DataFrame([format_whale_row(w) for w in whales]), height=420)
+
+
+def _prediction_rows(legs: list, limit: int = 40) -> list[dict]:
+    ranked = sorted(
+        legs,
+        key=lambda leg: (leg.market.liquidity or 0.0, leg.implied_probability),
+        reverse=True,
+    )
+    rows: list[dict] = []
+    for leg in ranked[:limit]:
+        label = leg.market.label
+        if label.startswith("Polymarket — "):
+            label = label.removeprefix("Polymarket — ")
+        if label.startswith("Kalshi YES — "):
+            label = label.removeprefix("Kalshi YES — ")
+        if len(label) > 120:
+            label = label[:117] + "..."
+        liq = leg.market.liquidity
+        rows.append(
+            {
+                "Venue": leg.market.sportsbook.title(),
+                "Contract": label,
+                "Implied": f"{leg.implied_probability:.1%}",
+                "Liquidity": f"${liq:,.0f}" if liq is not None else "—",
+                "Bid": f"{leg.market.bid:.1%}" if leg.market.bid is not None else "—",
+                "Ask": f"{leg.market.ask:.1%}" if leg.market.ask is not None else "—",
+            }
+        )
+    return rows
+
+
+def render_prediction_markets(
+    prediction_legs: list,
+    live_legs: list,
+    match_results: list | None = None,
+) -> None:
+    hero(
+        "Prediction Markets",
+        "Live Kalshi & Polymarket prices — read-only comparison against sportsbooks (no order execution).",
+    )
+    if not prediction_legs:
+        st.warning(
+            "No prediction-market contracts loaded. Click **Refresh all** on the dashboard "
+            "and confirm `ENABLE_PREDICTION_MARKETS=true` in `.env`."
+        )
+        return
+
+    kalshi = [leg for leg in prediction_legs if leg.market.sportsbook.lower() == "kalshi"]
+    poly = [leg for leg in prediction_legs if leg.market.sportsbook.lower() == "polymarket"]
+    matched = [m for m in (match_results or []) if getattr(m, "matched", False)]
+
+    metric_row(
+        [
+            ("Kalshi", str(len(kalshi)), "contracts"),
+            ("Polymarket", str(len(poly)), "contracts"),
+            ("Linked to books", str(len(matched)), "matched outcomes"),
+            ("Sportsbook lines", str(len(live_legs)), "for comparison"),
+        ]
+    )
+
+    tab_kalshi, tab_poly, tab_linked = st.tabs(
+        [f"Kalshi ({len(kalshi)})", f"Polymarket ({len(poly)})", f"vs Sportsbooks ({len(matched)})"]
+    )
+    with tab_kalshi:
+        if kalshi:
+            dataframe_compact(pd.DataFrame(_prediction_rows(kalshi, 60)), height=520)
+        else:
+            st.info("Kalshi returned no open soccer contracts on this scan.")
+    with tab_poly:
+        if poly:
+            dataframe_compact(pd.DataFrame(_prediction_rows(poly, 60)), height=520)
+        else:
+            st.info("Polymarket returned no soccer contracts on this scan.")
+    with tab_linked:
+        if not matched:
+            st.caption(
+                "Contracts are loaded, but none matched a sportsbook leg tightly enough yet. "
+                "Check **Arbitrage** for team-linked gaps."
+            )
+        else:
+            linked_rows = []
+            for result in matched[:40]:
+                book = result.sportsbook_leg
+                pred = result.prediction_leg
+                linked_rows.append(
+                    {
+                        "Sportsbook pick": book.market.label,
+                        "Book": book.market.sportsbook,
+                        "Book implied": f"{book.implied_probability:.1%}",
+                        "Contract": pred.market.label.replace("Polymarket — ", "").replace("Kalshi YES — ", "")[:90],
+                        "Venue": pred.market.sportsbook.title(),
+                        "Contract implied": f"{pred.implied_probability:.1%}",
+                        "Match score": f"{result.score:.0%}",
+                    }
+                )
+            dataframe_compact(pd.DataFrame(linked_rows), height=420)
 
 
 def render_arbitrage(live_legs: list, kalshi_path: Path | None) -> None:

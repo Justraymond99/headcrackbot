@@ -40,7 +40,7 @@ The project now has a production-shaped Headcrack AI foundation:
 - Soccer player shot model driven by the feature store
 - Event-level soccer player-prop ingestion (shots, shots on target, goals, assists)
 - World Cup player-prop fetch in the dashboard, with an honest no-coverage state
-- Odds Screen, +EV Finder, Prop Optimizer, Whale Watch, Arbitrage, and MonsterGPT tools
+- Odds Screen, +EV Finder, Prop Optimizer, Whale Watch, Arbitrage, and CrackBot tools
 - Automated daily report generation
 - Natural-language card explanations with an optional LLM narrator and offline template fallback
 - Regression tests for probability, provider adapters, persistence, config safety, dashboard imports, tracking, calibration, feature store, shot model, and reporting
