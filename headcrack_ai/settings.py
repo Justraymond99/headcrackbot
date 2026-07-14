@@ -39,6 +39,11 @@ class Settings(BaseSettings):
 
     openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")
 
+    telegram_bot_token: str | None = Field(default=None, alias="TELEGRAM_BOT_TOKEN")
+    telegram_chat_id: str | None = Field(default=None, alias="TELEGRAM_CHAT_ID")
+    telegram_allowed_chat_ids: str = Field(default="", alias="TELEGRAM_ALLOWED_CHAT_IDS")
+    telegram_poll_timeout: int = Field(default=30, alias="TELEGRAM_POLL_TIMEOUT")
+
     kalshi_base_url: str = Field(
         default="https://api.elections.kalshi.com/trade-api/v2",
         alias="KALSHI_BASE_URL",

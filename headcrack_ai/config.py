@@ -44,11 +44,21 @@ class HeadcrackConfig:
     polymarket_gamma_url: str = "https://gamma-api.polymarket.com"
     polymarket_clob_url: str = "https://clob.polymarket.com"
     enable_prediction_markets: bool = False
+    telegram_bot_token: str | None = None
+    telegram_allowed_chat_ids: tuple[str, ...] = ()
+    telegram_poll_timeout: int = 30
 
     @classmethod
     def from_env(cls) -> "HeadcrackConfig":
         settings = get_settings()
         raw_database_url = settings.resolved_database_url()
+        allowed_chat_ids = {
+            item.strip()
+            for item in settings.telegram_allowed_chat_ids.split(",")
+            if item.strip()
+        }
+        if settings.telegram_chat_id:
+            allowed_chat_ids.add(settings.telegram_chat_id.strip())
         return cls(
             database_url=require_sqlite_url(raw_database_url),
             warehouse_url=settings.warehouse_url,
@@ -60,4 +70,7 @@ class HeadcrackConfig:
             polymarket_gamma_url=settings.polymarket_gamma_url,
             polymarket_clob_url=settings.polymarket_clob_url,
             enable_prediction_markets=settings.enable_prediction_markets,
+            telegram_bot_token=settings.telegram_bot_token,
+            telegram_allowed_chat_ids=tuple(sorted(allowed_chat_ids)),
+            telegram_poll_timeout=max(5, min(settings.telegram_poll_timeout, 50)),
         )
